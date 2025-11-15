@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:anthropic": "node scripts/test-anthropic.mjs"
+    "test:anthropic": "node scripts/test-anthropic.mjs",
+    "test:brightdata": "node scripts/test-bright-data.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",

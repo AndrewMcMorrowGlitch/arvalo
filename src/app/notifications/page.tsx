@@ -53,8 +53,14 @@ export default function NotificationsPage() {
     }
   }
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
+  const isCrossRetailer = (notification: Notification) =>
+    notification.title?.startsWith('Better price at')
+
+  const getNotificationIcon = (notification: Notification) => {
+    if (isCrossRetailer(notification)) {
+      return '🛍️'
+    }
+    switch (notification.type) {
       case 'price_drop':
         return '💰'
       case 'return_expiring':
@@ -143,7 +149,7 @@ export default function NotificationsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <span className="text-2xl">
-                        {getNotificationIcon(notification.type)}
+                        {getNotificationIcon(notification)}
                       </span>
                       <div>
                         <CardTitle className="text-lg text-[#37322F] font-sans font-semibold">

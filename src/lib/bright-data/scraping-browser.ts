@@ -2,19 +2,24 @@ import puppeteer, { Browser, Page } from 'puppeteer-core';
 
 const BRIGHT_DATA_CUSTOMER_ID = process.env.BRIGHT_DATA_CUSTOMER_ID!;
 // Support both SBR and SBP (typo in env var name)
-const BRIGHT_DATA_SBR_PASSWORD = process.env.BRIGHT_DATA_SBR_PASSWORD || process.env.BRIGHT_DATA_SBP_PASSWORD!;
+const BRIGHT_DATA_SBR_PASSWORD =
+  process.env.BRIGHT_DATA_SBR_PASSWORD || process.env.BRIGHT_DATA_SBP_PASSWORD!;
 // Allow custom zone name, default to scraping_browser1
 const BRIGHT_DATA_ZONE = process.env.BRIGHT_DATA_ZONE || 'scraping_browser1';
+const BRIGHT_DATA_SBR_ENDPOINT = process.env.BRIGHT_DATA_SBR_ENDPOINT;
 
-if (!BRIGHT_DATA_CUSTOMER_ID || !BRIGHT_DATA_SBR_PASSWORD) {
+if (!BRIGHT_DATA_SBR_ENDPOINT && (!BRIGHT_DATA_CUSTOMER_ID || !BRIGHT_DATA_SBR_PASSWORD)) {
   console.warn('Bright Data credentials not configured. Customer ID or Password missing.');
 }
 
 /**
  * Bright Data Scraping Browser WebSocket endpoint
  * Format: wss://brd-customer-{CUSTOMER_ID}-zone-{ZONE_NAME}:{PASSWORD}@brd.superproxy.io:9222
+ * Can be overridden with BRIGHT_DATA_SBR_ENDPOINT
  */
-const SBR_WS_ENDPOINT = `wss://brd-customer-${BRIGHT_DATA_CUSTOMER_ID}-zone-${BRIGHT_DATA_ZONE}:${BRIGHT_DATA_SBR_PASSWORD}@brd.superproxy.io:9222`;
+const SBR_WS_ENDPOINT =
+  BRIGHT_DATA_SBR_ENDPOINT ||
+  `wss://brd-customer-${BRIGHT_DATA_CUSTOMER_ID}-zone-${BRIGHT_DATA_ZONE}:${BRIGHT_DATA_SBR_PASSWORD}@brd.superproxy.io:9222`;
 
 let browserInstance: Browser | null = null;
 
@@ -28,8 +33,10 @@ export async function connectScrapingBrowser(): Promise<Browser> {
   }
 
   try {
-    console.log(`Attempting to connect to Bright Data zone: ${BRIGHT_DATA_ZONE}`);
-    console.log(`WebSocket endpoint: ${SBR_WS_ENDPOINT.replace(/:([^:@]+)@/, ':****@')}`); // Log endpoint with hidden password
+    console.log(`Attempting to connect to Bright Data endpoint: ${SBR_WS_ENDPOINT.replace(/:([^:@]+)@/, ':****@')}`);
+    if (!BRIGHT_DATA_SBR_ENDPOINT) {
+      console.log(`Using composed zone: ${BRIGHT_DATA_ZONE}`);
+    }
 
     browserInstance = await puppeteer.connect({
       browserWSEndpoint: SBR_WS_ENDPOINT,
@@ -79,10 +86,16 @@ export async function createPage(browser: Browser): Promise<Page> {
 
   // Set viewport for consistent rendering
   await page.setViewport({ width: 1920, height: 1080 });
+  await page.setUserAgent(
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36'
+  );
+  await page.setExtraHTTPHeaders({
+    'accept-language': 'en-US,en;q=0.9',
+  });
 
   // Set reasonable timeouts
-  page.setDefaultTimeout(30000); // 30 seconds
-  page.setDefaultNavigationTimeout(30000);
+  page.setDefaultTimeout(60000); // 60 seconds
+  page.setDefaultNavigationTimeout(60000);
 
   return page;
 }
@@ -93,7 +106,7 @@ export async function createPage(browser: Browser): Promise<Page> {
 export async function navigateToUrl(
   page: Page,
   url: string,
-  options = { waitUntil: 'networkidle2' as const }
+  options = { waitUntil: 'domcontentloaded' as const }
 ): Promise<void> {
   const maxRetries = 3;
   let lastError: Error | null = null;
@@ -102,8 +115,9 @@ export async function navigateToUrl(
     try {
       await page.goto(url, {
         ...options,
-        timeout: 30000,
+        timeout: 60000,
       });
+      await page.waitForTimeout(2000);
       return; // Success
     } catch (error) {
       lastError = error as Error;

@@ -20,50 +20,8 @@ export interface PriceCheckResult {
 export async function checkProductPrice(
   productUrl: string
 ): Promise<PriceCheckResult> {
-  let scrapingBrowserError: Error | null = null;
-
-  // Try Bright Data first, fallback to Claude AI if it fails
-  const skipBrightData = false;
-
-  if (!skipBrightData) {
-    // Try Bright Data Scraping Browser first
-    try {
-      console.log('Using Bright Data Scraping Browser for:', productUrl);
-      return await scrapeWithBrowser(productUrl);
-    } catch (error) {
-      scrapingBrowserError = error as Error;
-      logError(error, 'checkProductPrice - Scraping Browser');
-      console.error('Scraping Browser failed:', error);
-    }
-  } else {
-    console.log('Bright Data not configured, using Claude AI directly for:', productUrl);
-  }
-
-  // Fallback to Claude AI scraper
-  try {
-    console.log('Using Claude AI scraper for:', productUrl);
-    return await scrapeProductPrice(productUrl);
-  } catch (error) {
-    logError(error, 'checkProductPrice - Claude scraper');
-    console.error('Claude scraper also failed:', error);
-
-    // Provide detailed error message
-    if (scrapingBrowserError) {
-      const browserError = scrapingBrowserError?.message || 'Unknown error';
-      const claudeError = (error as Error).message || 'Unknown error';
-
-      throw new Error(
-        `Failed to check product price. Both methods failed:\n` +
-        `1. Scraping Browser: ${browserError}\n` +
-        `2. Claude AI: ${claudeError}\n` +
-        `Please try a different product URL or try again later.`
-      );
-    } else {
-      throw new Error(
-        `Failed to scrape price from ${productUrl}: ${(error as Error).message}`
-      );
-    }
-  }
+  console.log('Using Bright Data Scraping Browser for:', productUrl);
+  return await scrapeWithBrowser(productUrl);
 }
 
 /**
@@ -76,6 +34,7 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
   try {
     // Navigate to product page
     await navigateToUrl(page, productUrl);
+    const resolvedUrl = page.url();
 
     // Get retailer-specific selectors
     const selectors = getSelectorsForUrl(productUrl);
@@ -101,33 +60,55 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
     if (!price) {
       console.log('Price not found with selectors, searching page text...');
 
-      const pagePriceMatch = await page.evaluate(() => {
+      const pagePriceCandidates = (await page.evaluate(() => {
         const bodyText = document.body.innerText;
 
-        // Look for price patterns like $123.45, $123, etc.
         const pricePatterns = [
-          /\$\s*(\d{1,5}(?:,\d{3})*(?:\.\d{2})?)/g, // $1,234.56 or $1234.56
-          /(\d{1,5}(?:,\d{3})*(?:\.\d{2})?)\s*(?:USD|dollars?)/gi, // 1234.56 USD
+          /\$\s*(\d{1,5}(?:,\d{3})*(?:\.\d{2})?)/g,
+          /(\d{1,5}(?:,\d{3})*(?:\.\d{2})?)\s*(?:USD|dollars?)/gi,
         ];
+
+        const candidates: Array<{ text: string; value: number; context: string }> = [];
 
         for (const pattern of pricePatterns) {
           const matches = Array.from(bodyText.matchAll(pattern));
-          if (matches.length > 0) {
-            // Return the first reasonable price (not 0, not too high)
-            for (const match of matches) {
-              const priceNum = parseFloat(match[1].replace(/,/g, ''));
-              if (priceNum > 0 && priceNum < 100000) {
-                return match[0];
-              }
-            }
+          for (const match of matches) {
+            const raw = (match[1] || match[0] || '').replace(/,/g, '');
+            const value = parseFloat(raw);
+            if (!value || value <= 0 || value > 100000) continue;
+
+            const idx = (match as any).index ?? 0;
+            const start = Math.max(0, idx - 40);
+            const end = Math.min(bodyText.length, idx + (match[0]?.length || 0) + 40);
+            const context = bodyText.slice(start, end);
+
+            candidates.push({
+              text: match[0],
+              value,
+              context,
+            });
           }
         }
 
-        return null;
-      });
+        return candidates;
+      })) as Array<{ text: string; value: number; context: string }>;
 
-      console.log('Found price in page text:', pagePriceMatch);
-      price = parsePrice(pagePriceMatch);
+      console.log('Found price candidates in page text:', pagePriceCandidates);
+
+      if (pagePriceCandidates.length > 0) {
+        const filtered = pagePriceCandidates.filter((candidate) =>
+          !containsInstallmentLanguage(`${candidate.text || ''} ${candidate.context || ''}`)
+        );
+
+        const sorted = (filtered.length > 0 ? filtered : pagePriceCandidates).sort(
+          (a, b) => b.value - a.value
+        );
+
+        if (sorted.length > 0) {
+          console.log('Selected price candidate from text:', sorted[0]);
+          price = sorted[0].value;
+        }
+      }
     }
 
     if (!price) {
@@ -141,7 +122,7 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
     const available = checkAvailability(availabilityText);
 
     return {
-      url: productUrl,
+      url: resolvedUrl || productUrl,
       current_price: price,
       currency: 'USD', // TODO: Add currency detection
       available,
@@ -157,8 +138,37 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
 /**
  * Parse price from text (handles $49.99, 49.99, etc.)
  */
+const INSTALLMENT_KEYWORDS = [
+  'per month',
+  '/month',
+  '/mo',
+  'monthly',
+  'mo.',
+  'per mo',
+  'per week',
+  '/week',
+  '/wk',
+  'bi-week',
+  'biweek',
+  'biweekly',
+  'apr',
+  'installment',
+  'financ',
+  'per day',
+  '/day',
+  'mo ',
+];
+
+function containsInstallmentLanguage(text: string) {
+  const normalized = text.toLowerCase();
+  return INSTALLMENT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
 function parsePrice(priceText: string | null): number | null {
   if (!priceText) return null;
+  if (containsInstallmentLanguage(priceText)) {
+    return null;
+  }
 
   // Remove currency symbols, commas, and whitespace
   const cleaned = priceText.replace(/[$,\s]/g, '');
