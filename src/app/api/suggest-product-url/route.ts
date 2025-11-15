@@ -40,30 +40,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Use Claude with web search to find product URLs
+    // Use Claude to suggest likely product URLs based on common patterns
     const searchQuery = `${productName} ${merchantName} product page`;
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 2000,
-      tools: [
-        {
-          type: 'web_search_20250305' as const,
-          name: 'web_search',
-        },
-      ],
       messages: [
         {
           role: 'user',
-          content: `Find the official product page URL for "${productName}" from ${merchantName}.
+          content: `Based on common URL patterns for online retailers, suggest likely product page URLs for "${productName}" from ${merchantName}.
 
-Search for: ${searchQuery}
+Common URL patterns:
+- Amazon: https://www.amazon.com/dp/[ASIN] or https://www.amazon.com/[product-name]/dp/[ASIN]
+- Walmart: https://www.walmart.com/ip/[product-name]/[ID]
+- Target: https://www.target.com/p/[product-name]/-/A-[ID]
+- Best Buy: https://www.bestbuy.com/site/[product-name]/[ID].p
+- Home Depot: https://www.homedepot.com/p/[product-name]/[ID]
 
 Requirements:
-1. Find the actual product page URL from the retailer's website
-2. Prioritize URLs from these domains: amazon.com, walmart.com, target.com, bestbuy.com, homedepot.com, ebay.com
-3. Return up to 3 most relevant product page URLs
-4. Each URL should be a direct link to the specific product, not a search results page
+1. Generate 3 likely URL patterns based on the merchant and product name
+2. Use proper URL encoding for product names
+3. For merchants not listed above, use their typical URL structure
+4. Mark confidence based on how common the pattern is for that merchant
 
 Return your response in this exact JSON format:
 {
@@ -72,7 +71,8 @@ Return your response in this exact JSON format:
       "url": "https://example.com/product-page",
       "title": "Product Name",
       "confidence": "high|medium|low",
-      "source": "Domain name"
+      "source": "Merchant name",
+      "note": "Brief explanation of URL pattern"
     }
   ]
 }`,
