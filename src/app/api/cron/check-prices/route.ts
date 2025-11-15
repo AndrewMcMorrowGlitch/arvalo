@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { checkProductPrice } from '@/lib/bright-data/price-tracker';
+import { autoHandlePriceDropRefund } from '@/lib/refund/auto-price-drop';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     // Get all active price tracking records that need checking
     const { data: trackingRecords, error } = await supabase
       .from('price_tracking')
-      .select('*, purchases!inner(user_id, merchant_name)')
+      .select('*, purchases!inner(user_id, merchant_name, purchase_date, total_amount, items)')
       .eq('tracking_active', true)
       .lt(
         'last_checked',
@@ -81,6 +82,20 @@ export async function GET(request: Request) {
             title: 'Price Drop Detected!',
             message: `${record.product_name} dropped from $${record.original_price} to $${priceResult.current_price}. Save $${(record.original_price - priceResult.current_price).toFixed(2)}!`,
             priority: 'high',
+          });
+
+          await autoHandlePriceDropRefund({
+            supabase,
+            purchase: {
+              id: record.purchase_id,
+              user_id: record.purchases.user_id,
+              merchant_name: record.purchases.merchant_name,
+              purchase_date: record.purchases.purchase_date,
+              total_amount: record.purchases.total_amount,
+              items: record.purchases.items || [],
+            },
+            currentPrice: priceResult.current_price,
+            trigger: 'cron',
           });
         }
 

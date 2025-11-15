@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { TrendingDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { RefundDialog } from '@/components/refund-dialog'
 
 type PriceTracking = {
   id: string
@@ -17,6 +18,11 @@ type Purchase = {
   purchase_date: string
   total_amount: number
   currency: string
+  items: any[]
+  retailers?: {
+    has_price_match: boolean
+    price_match_days: number
+  }
   price_tracking?: PriceTracking[] | null
 }
 
@@ -28,12 +34,15 @@ type PriceDropItem = {
   savings: number
   store: string
   purchaseDate: string
+  purchase: Purchase
 }
 
 export function PriceDrops() {
   const [drops, setDrops] = useState<PriceDropItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -62,6 +71,7 @@ export function PriceDrops() {
               savings: t.price_drop_amount,
               store: p.merchant_name,
               purchaseDate: new Date(p.purchase_date).toLocaleDateString(),
+              purchase: p,
             })
           }
         }
@@ -150,6 +160,10 @@ export function PriceDrops() {
                   <Button
                     size="sm"
                     className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 border-2 border-emerald-600"
+                    onClick={() => {
+                      setSelectedPurchase(drop.purchase)
+                      setRefundDialogOpen(true)
+                    }}
                   >
                     Start refund
                   </Button>
@@ -159,7 +173,19 @@ export function PriceDrops() {
           </div>
         ))}
       </div>
+
+      {selectedPurchase && (
+        <RefundDialog
+          open={refundDialogOpen}
+          onOpenChange={(open) => {
+            setRefundDialogOpen(open)
+            if (!open) {
+              setSelectedPurchase(null)
+            }
+          }}
+          purchase={selectedPurchase}
+        />
+      )}
     </div>
   )
 }
-

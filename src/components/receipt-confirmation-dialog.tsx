@@ -29,12 +29,20 @@ interface ReceiptData {
   confidence: number
 }
 
+interface SavedPurchaseSummary {
+  id: string
+  merchant_name: string
+  total_amount: number
+  items?: ReceiptItem[]
+}
+
 interface ReceiptConfirmationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   receiptData: ReceiptData | null
-  onConfirm: (data: ReceiptData) => Promise<void>
+  onConfirm: (data: ReceiptData) => Promise<SavedPurchaseSummary | null | void>
   onCancel: () => void
+  onSuccess?: (purchase: SavedPurchaseSummary) => void
 }
 
 export function ReceiptConfirmationDialog({
@@ -43,6 +51,7 @@ export function ReceiptConfirmationDialog({
   receiptData,
   onConfirm,
   onCancel,
+  onSuccess,
 }: ReceiptConfirmationDialogProps) {
   const [editedData, setEditedData] = useState<ReceiptData | null>(null)
   const [saving, setSaving] = useState(false)
@@ -115,11 +124,13 @@ export function ReceiptConfirmationDialog({
 
     setSaving(true)
     try {
-      await onConfirm(editedData)
+      const savedPurchase = await onConfirm(editedData)
       setSuccess(true)
+      if (savedPurchase && onSuccess) {
+        onSuccess(savedPurchase)
+      }
       setTimeout(() => {
         handleClose()
-        window.location.reload() // Refresh to show new purchase
       }, 1500)
     } catch (error) {
       console.error('Failed to save receipt:', error)

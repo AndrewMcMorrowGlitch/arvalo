@@ -1,5 +1,5 @@
-import { anthropic, MODELS } from '@/lib/anthropic';
-import { retryWithTimeout, logError } from '@/lib/utils/error-handling';
+import { anthropic, MODELS } from '@/lib/anthropic'
+import { retryWithTimeout, logError } from '@/lib/utils/error-handling'
 
 export interface RefundEmail {
   subject: string;
@@ -26,6 +26,10 @@ export async function generateRefundEmail(
     email: string;
   }
 ): Promise<RefundEmail> {
+  if (!anthropic) {
+    return buildFallbackEmail(refundType, purchase, userInfo)
+  }
+
   try {
     const message = await anthropic.messages.create({
     model: MODELS.SONNET,
@@ -79,6 +83,72 @@ Return ONLY the JSON object.`,
     return JSON.parse(jsonMatch[0]);
   } catch (error) {
     logError(error, 'generateRefundEmail');
+    if (shouldFallbackToTemplate(error)) {
+      return buildFallbackEmail(refundType, purchase, userInfo)
+    }
     throw new Error('Failed to generate refund email. Please try again later.');
+  }
+}
+
+function shouldFallbackToTemplate(error: unknown) {
+  if (!error) return false
+  const status = (error as any)?.status
+  if (status === 401 || status === 403) return true
+  const message = typeof error === 'string' ? error : (error as Error)?.message || ''
+  return /x-api-key|authentication|unauthorized/i.test(message)
+}
+
+function buildFallbackEmail(
+  refundType: 'price_drop' | 'return' | 'price_match',
+  purchase: {
+    merchant: string
+    purchaseDate: string
+    originalPrice: number
+    currentPrice?: number
+    items: any[]
+  },
+  userInfo: {
+    name: string
+    email: string
+  }
+): RefundEmail {
+  const subject =
+    refundType === 'price_drop'
+      ? `Price adjustment request for ${purchase.merchant} order`
+      : refundType === 'price_match'
+        ? `Price match request for ${purchase.merchant}`
+        : `Return/refund request for ${purchase.merchant}`
+
+  const greeting = `Hi ${purchase.merchant} Support,`
+
+  const bodyLines = [
+    greeting,
+    '',
+    `I'm reaching out regarding my purchase on ${purchase.purchaseDate}.`,
+  ]
+
+  if (refundType === 'price_drop' && purchase.currentPrice) {
+    bodyLines.push(
+      `The item is now listed at $${purchase.currentPrice.toFixed(2)}, down from the $${purchase.originalPrice.toFixed(2)} I paid.`
+    )
+    bodyLines.push('Could you please issue a price adjustment for the difference?')
+  } else if (refundType === 'price_match' && purchase.currentPrice) {
+    bodyLines.push(
+      `I've found the same item for $${purchase.currentPrice.toFixed(2)}.`
+    )
+    bodyLines.push('Please confirm if your price-match policy applies so I can receive the adjustment.')
+  } else {
+    bodyLines.push('I would like to initiate a return/refund for this purchase.')
+  }
+
+  bodyLines.push('Thank you for your help and have a great day!')
+  bodyLines.push('')
+  bodyLines.push(`${userInfo.name}`)
+  bodyLines.push(userInfo.email)
+
+  return {
+    subject,
+    body: bodyLines.join('\n'),
+    tone: 'friendly',
   }
 }

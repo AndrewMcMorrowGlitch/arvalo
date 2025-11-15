@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { checkProductPrice } from '@/lib/bright-data/price-tracker';
 import { ProductUrlSchema, UuidSchema, formatValidationError } from '@/lib/validation/schemas';
 import { z } from 'zod';
+import { createServiceRoleClient } from '@/lib/supabase/service-role';
+import { autoHandlePriceDropRefund } from '@/lib/refund/auto-price-drop';
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,6 +101,25 @@ export async function POST(request: NextRequest) {
         message: `${priceResult.title} is now $${currentPrice.toFixed(2)} (was $${originalPrice.toFixed(2)}). Save $${priceDropAmount!.toFixed(2)}!`,
         priority: 'high',
       });
+
+      try {
+        const serviceSupabase = createServiceRoleClient();
+        await autoHandlePriceDropRefund({
+          supabase: serviceSupabase,
+          purchase: {
+            id: purchase.id,
+            user_id: purchase.user_id,
+            merchant_name: purchase.merchant_name,
+            purchase_date: purchase.purchase_date,
+            total_amount: purchase.total_amount,
+            items: purchase.items || [],
+          },
+          currentPrice,
+          trigger: 'instant',
+        });
+      } catch (error) {
+        console.error('Auto refund email failed (instant):', error);
+      }
     }
 
     return NextResponse.json({

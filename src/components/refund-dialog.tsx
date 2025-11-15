@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -59,6 +59,13 @@ export function RefundDialog({ open, onOpenChange, purchase }: RefundDialogProps
 
   // Check if retailer supports price matching
   const supportsPriceMatch = purchase.retailers?.has_price_match || false
+
+  useEffect(() => {
+    if (open && hasPriceTracking && trackedPrice && !currentPrice) {
+      setRefundType('price_drop')
+      setCurrentPrice(trackedPrice.toFixed(2))
+    }
+  }, [open, hasPriceTracking, trackedPrice])
 
   const handleGenerateEmail = async () => {
     setError('')

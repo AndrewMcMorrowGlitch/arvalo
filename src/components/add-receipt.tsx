@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileUpload } from '@/components/file-upload'
 import { ReceiptConfirmationDialog } from '@/components/receipt-confirmation-dialog'
+import { TrackPriceDialog } from '@/components/track-price-dialog'
 import { LoadingProgress, LoadingStep } from '@/components/ui/loading-progress'
 import { Upload, FileText, Loader2 } from 'lucide-react'
 
@@ -23,6 +24,13 @@ interface ReceiptData {
   confidence: number
 }
 
+type SavedPurchase = {
+  id: string
+  merchant_name: string
+  total_amount: number
+  items?: Array<{ name?: string }>
+}
+
 export function AddReceipt() {
   const [receiptText, setReceiptText] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -32,6 +40,8 @@ export function AddReceipt() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>([])
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const [newPurchase, setNewPurchase] = useState<SavedPurchase | null>(null)
+  const [trackDialogOpen, setTrackDialogOpen] = useState(false)
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file)
@@ -175,7 +185,7 @@ export function AddReceipt() {
     }
   }
 
-  const handleConfirmReceipt = async (confirmedData: ReceiptData) => {
+  const handleConfirmReceipt = async (confirmedData: ReceiptData): Promise<SavedPurchase> => {
     try {
       // Save to database
       const response = await fetch('/api/purchases', {
@@ -194,7 +204,7 @@ export function AddReceipt() {
         throw new Error(data.error || 'Failed to save receipt')
       }
 
-      // Success! Dialog will handle the UI feedback and page reload
+      return data.purchase as SavedPurchase
     } catch (error) {
       console.error('Error in handleConfirmReceipt:', error)
       throw error // Re-throw so dialog can handle it
@@ -324,7 +334,34 @@ Date: 01/15/2024`}
         receiptData={extractedData}
         onConfirm={handleConfirmReceipt}
         onCancel={handleCancelConfirmation}
+        onSuccess={(purchase) => {
+          if (purchase) {
+            setNewPurchase({
+              id: purchase.id,
+              merchant_name: purchase.merchant_name,
+              total_amount: purchase.total_amount,
+              items: purchase.items,
+            })
+            setTrackDialogOpen(true)
+          }
+        }}
       />
+
+      {newPurchase && (
+        <TrackPriceDialog
+          open={trackDialogOpen}
+          onOpenChange={(open) => {
+            setTrackDialogOpen(open)
+            if (!open) {
+              setNewPurchase(null)
+            }
+          }}
+          purchaseId={newPurchase.id}
+          merchantName={newPurchase.merchant_name}
+          productName={newPurchase.items?.[0]?.name || undefined}
+          totalAmount={newPurchase.total_amount}
+        />
+      )}
     </>
   )
 }

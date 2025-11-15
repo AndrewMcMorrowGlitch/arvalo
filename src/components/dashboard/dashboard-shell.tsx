@@ -26,6 +26,7 @@ import { Subscriptions } from '@/components/dashboard/subscriptions'
 import { CrossRetailer } from '@/components/dashboard/cross-retailer'
 import { DuplicateCharges } from '@/components/dashboard/duplicate-charges'
 import { WarrantyTracking } from '@/components/dashboard/warranty-tracking'
+import { AddReceipt } from '@/components/add-receipt'
 
 export type DashboardStats = {
   realizedSavings: number
@@ -57,6 +58,7 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [showAddReceipt, setShowAddReceipt] = useState(false)
 
   const navItems = [
     { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
@@ -378,6 +380,29 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
                           })}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Manual Receipt Entry */}
+                    <div className="bg-white border border-gray-200 rounded-lg">
+                      <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-base font-semibold text-gray-900">
+                            Manually add a receipt
+                          </h2>
+                          <p className="text-sm text-gray-600">
+                            Paste receipt text or upload a photo to start tracking refunds and
+                            price drops instantly.
+                          </p>
+                        </div>
+                        <Button size="sm" onClick={() => setShowAddReceipt(prev => !prev)}>
+                          {showAddReceipt ? 'Hide form' : 'Add receipt'}
+                        </Button>
+                      </div>
+                      {showAddReceipt && (
+                        <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+                          <AddReceipt />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
