@@ -7,9 +7,9 @@ import { RefundDialog } from '@/components/refund-dialog'
 
 type PriceTracking = {
   id: string
-  current_price: number | null
-  price_drop_detected: boolean | null
-  price_drop_amount: number | null
+  current_price: number
+  price_drop_detected: boolean
+  price_drop_amount: number
 }
 
 type Purchase = {
@@ -19,11 +19,12 @@ type Purchase = {
   total_amount: number
   currency: string
   items: any[]
+  return_deadline: string | null
   retailers?: {
     has_price_match: boolean
     price_match_days: number
   }
-  price_tracking?: PriceTracking[] | null
+  price_tracking?: PriceTracking[]
 }
 
 type PriceDropItem = {

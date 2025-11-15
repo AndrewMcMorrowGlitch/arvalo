@@ -28,7 +28,11 @@ type SavedPurchase = {
   id: string
   merchant_name: string
   total_amount: number
-  items?: Array<{ name?: string }>
+  items?: Array<{
+    name: string
+    price: number
+    quantity: number
+  }>
 }
 
 export function AddReceipt() {
@@ -185,7 +189,9 @@ export function AddReceipt() {
     }
   }
 
-  const handleConfirmReceipt = async (confirmedData: ReceiptData): Promise<SavedPurchase> => {
+  const handleConfirmReceipt = async (
+    confirmedData: ReceiptData,
+  ): Promise<void | SavedPurchase | null> => {
     try {
       // Save to database
       const response = await fetch('/api/purchases', {
