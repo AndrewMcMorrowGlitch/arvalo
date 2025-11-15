@@ -31,8 +31,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Must exactly match the redirect URI used in /api/gmail/connect
-  const origin = request.nextUrl.origin
-  const redirectUri = `${origin}/api/gmail/callback`
+  const redirectUri =
+    process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+    (process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/gmail/callback`
+      : `${request.nextUrl.origin}/api/gmail/callback`)
 
   try {
     // Exchange code for tokens

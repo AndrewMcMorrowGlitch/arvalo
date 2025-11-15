@@ -15,9 +15,12 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // Always derive redirect URI from the actual request origin
-  const origin = request.nextUrl.origin
-  const redirectUri = `${origin}/api/gmail/callback`
+  // Prefer explicit production URL, then public app URL, then fallback to request origin
+  let redirectUri =
+    process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+    (process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/gmail/callback`
+      : `${request.nextUrl.origin}/api/gmail/callback`)
 
   const params = new URLSearchParams({
     client_id: clientId,
