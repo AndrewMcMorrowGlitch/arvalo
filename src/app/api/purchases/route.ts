@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ReceiptDataSchema, formatValidationError } from '@/lib/validation/schemas';
 import { z } from 'zod';
+import {
+  detectRecurrentPurchases,
+  extractPurchaseData,
+  notifyFrontend,
+  savePurchase,
+  updateRecurrentPurchases,
+} from '@/lib/recurrent'
 
 /**
  * GET /api/purchases - List all purchases for authenticated user
@@ -312,6 +319,16 @@ export async function POST(request: NextRequest) {
           merchant: receiptData.merchant,
         },
       })
+    }
+
+    try {
+      const purchaseSummary = extractPurchaseData(receiptData)
+      await savePurchase(supabase, user.id, purchaseSummary)
+      const recurrentCandidates = await detectRecurrentPurchases(supabase, user.id)
+      const newItems = await updateRecurrentPurchases(supabase, user.id, recurrentCandidates)
+      await notifyFrontend(supabase, user.id, newItems)
+    } catch (recurrentError) {
+      console.error('Recurrent purchase pipeline failed:', recurrentError)
     }
 
     // Create notification
