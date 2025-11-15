@@ -23,8 +23,7 @@ export async function checkProductPrice(
   let scrapingBrowserError: Error | null = null;
 
   // Try Bright Data first, fallback to Claude AI if it fails
-  // TEMPORARY: Skip Bright Data due to timeout issues with Best Buy
-  const skipBrightData = true;
+  const skipBrightData = false;
 
   if (!skipBrightData) {
     // Try Bright Data Scraping Browser first with 60s timeout
