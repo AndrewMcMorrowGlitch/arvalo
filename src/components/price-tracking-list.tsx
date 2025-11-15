@@ -40,9 +40,14 @@ export function PriceTrackingList() {
   }
 
   const handleRemove = async (id: string) => {
+    if (!confirm('Are you sure you want to stop tracking this product?')) {
+      return
+    }
+
     setRemovingId(id)
 
     // Optimistic update
+    const previousTracking = tracking
     setTracking(prev => prev.filter(t => t.id !== id))
 
     try {
@@ -51,15 +56,19 @@ export function PriceTrackingList() {
       })
 
       if (!response.ok) {
+        const errorData = await response.json()
+        console.error('Delete failed:', errorData)
         // Revert on error
-        await fetchTracking()
-        alert('Failed to remove tracking')
+        setTracking(previousTracking)
+        alert(`Failed to remove tracking: ${errorData.error || 'Unknown error'}`)
+      } else {
+        console.log('Successfully removed price tracking for:', id)
       }
     } catch (error) {
       console.error('Failed to remove tracking:', error)
       // Revert on error
-      await fetchTracking()
-      alert('Failed to remove tracking')
+      setTracking(previousTracking)
+      alert(`Failed to remove tracking: ${error instanceof Error ? error.message : 'Network error'}`)
     } finally {
       setRemovingId(null)
     }
