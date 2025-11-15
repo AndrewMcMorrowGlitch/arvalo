@@ -48,23 +48,21 @@ export async function POST(request: Request) {
   const validation = GiftCardSchema.safeParse(body);
 
   if (!validation.success) {
+    console.error('Gift card validation failed:', validation.error);
     return NextResponse.json(formatValidationError(validation.error), { status: 400 });
   }
 
-  const retailer = validation.data.retailer.trim()
-  const cardNumber = (validation.data.card_number ?? '').trim() || 'N/A'
-  const pin = (validation.data.pin ?? '').trim() || 'N/A'
-  const initialBalance = validation.data.initial_balance;
+  const { retailer, card_number, pin, initial_balance } = validation.data;
 
   const { data: newGiftCard, error: insertError } = await supabase
     .from('gift_cards')
     .insert({
       user_id: user.id,
-      retailer,
-      card_number: cardNumber, // TODO: Encrypt this value
-      pin, // TODO: Encrypt this value
-      initial_balance: initialBalance,
-      current_balance: initialBalance,
+      retailer: retailer, // Already trimmed by schema transform
+      card_number: card_number || 'N/A', // TODO: Encrypt this value
+      pin: pin || 'N/A', // TODO: Encrypt this value
+      initial_balance: initial_balance ?? 0,
+      current_balance: initial_balance ?? 0,
     })
     .select()
     .single();
@@ -82,7 +80,7 @@ export async function POST(request: Request) {
     action: 'card_added',
     details: {
       retailer,
-      initial_balance: initialBalance,
+      initial_balance: initial_balance ?? 0,
     },
   });
 
