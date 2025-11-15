@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { receiptText, receiptData: providedData, skipExtraction, extractOnly } = body;
+    const { receiptText, receiptData: providedData, skipExtraction, extractOnly, giftCardId } = body;
 
     // Import here to avoid circular dependencies
     const { extractReceiptData } = await import('@/lib/claude/extract-receipt');
@@ -194,6 +194,83 @@ export async function POST(request: NextRequest) {
     // These can be done later via a background job or cron
     let claudeAnalysis = null;
 
+    // Handle gift card if provided
+    if (giftCardId) {
+      // Verify user owns the gift card
+      const { data: giftCard, error: giftCardError } = await supabase
+        .from('gift_cards')
+        .select('*')
+        .eq('id', giftCardId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (giftCardError || !giftCard) {
+        return NextResponse.json(
+          { error: 'Gift card not found or does not belong to you' },
+          { status: 400 }
+        );
+      }
+
+      // Check if gift card has sufficient balance
+      if (giftCard.current_balance < receiptData.total) {
+        return NextResponse.json(
+          { error: `Insufficient gift card balance. Available: $${giftCard.current_balance}, Required: $${receiptData.total}` },
+          { status: 400 }
+        );
+      }
+
+      // Check if gift card is active
+      if (giftCard.status !== 'active') {
+        return NextResponse.json(
+          { error: `Gift card is ${giftCard.status} and cannot be used` },
+          { status: 400 }
+        );
+      }
+
+      // Deduct amount from gift card
+      const newBalance = giftCard.current_balance - receiptData.total;
+      const { error: updateError } = await supabase
+        .from('gift_cards')
+        .update({
+          current_balance: newBalance,
+          status: newBalance <= 0 ? 'depleted' : 'active',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', giftCardId);
+
+      if (updateError) {
+        console.error('Failed to update gift card balance:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to update gift card balance' },
+          { status: 500 }
+        );
+      }
+
+      // Create transaction record
+      await supabase.from('gift_card_transactions').insert({
+        gift_card_id: giftCardId,
+        amount: receiptData.total,
+        item_description: `Purchase at ${receiptData.merchant}`,
+        status: 'completed',
+        balance_before: giftCard.current_balance,
+        balance_after: newBalance,
+        completed_at: new Date().toISOString(),
+      });
+
+      // Log to audit log
+      await supabase.from('audit_log').insert({
+        user_id: user.id,
+        gift_card_id: giftCardId,
+        action: 'purchase_completed',
+        details: {
+          merchant: receiptData.merchant,
+          amount: receiptData.total,
+          balance_before: giftCard.current_balance,
+          balance_after: newBalance,
+        },
+      });
+    }
+
     // Save purchase
     const { data: purchase, error } = await supabase
       .from('purchases')
@@ -209,6 +286,7 @@ export async function POST(request: NextRequest) {
         return_deadline: returnDeadline.toISOString().split('T')[0],
         return_window_days: returnDays,
         claude_analysis: claudeAnalysis,
+        gift_card_id: giftCardId || null,
       })
       .select()
       .single();

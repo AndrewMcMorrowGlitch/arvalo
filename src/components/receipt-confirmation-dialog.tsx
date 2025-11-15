@@ -13,6 +13,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, Plus, X, CheckCircle2 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface ReceiptItem {
   name: string
@@ -33,7 +40,7 @@ interface ReceiptConfirmationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   receiptData: ReceiptData | null
-  onConfirm: (data: ReceiptData) => Promise<void>
+  onConfirm: (data: ReceiptData, giftCardId?: string) => Promise<void>
   onCancel: () => void
 }
 
@@ -47,6 +54,9 @@ export function ReceiptConfirmationDialog({
   const [editedData, setEditedData] = useState<ReceiptData | null>(null)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [giftCards, setGiftCards] = useState<Array<{ id: string; retailer: string; current_balance: number }>>([])
+  const [selectedGiftCardId, setSelectedGiftCardId] = useState<string>('')
+  const [loadingGiftCards, setLoadingGiftCards] = useState(false)
 
   // Initialize edited data when receipt data changes
   useEffect(() => {
@@ -55,6 +65,31 @@ export function ReceiptConfirmationDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiptData])
+
+  // Fetch gift cards when dialog opens
+  useEffect(() => {
+    if (open && giftCards.length === 0) {
+      fetchGiftCards()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const fetchGiftCards = async () => {
+    setLoadingGiftCards(true)
+    try {
+      const response = await fetch('/api/gift-cards')
+      if (response.ok) {
+        const data = await response.json()
+        // Filter to only active gift cards with balance
+        const activeCards = data.filter((card: any) => card.status === 'active' && card.current_balance > 0)
+        setGiftCards(activeCards)
+      }
+    } catch (error) {
+      console.error('Failed to fetch gift cards:', error)
+    } finally {
+      setLoadingGiftCards(false)
+    }
+  }
 
   const handleMerchantChange = (value: string) => {
     if (editedData) {
@@ -115,7 +150,7 @@ export function ReceiptConfirmationDialog({
 
     setSaving(true)
     try {
-      await onConfirm(editedData)
+      await onConfirm(editedData, selectedGiftCardId || undefined)
       setSuccess(true)
       setTimeout(() => {
         handleClose()
@@ -222,6 +257,43 @@ export function ReceiptConfirmationDialog({
                     className="border-[#E0DEDB] focus:border-[#37322F] focus:ring-[#37322F] font-sans"
                   />
                 </div>
+              </div>
+
+              {/* Gift Card Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="gift-card" className="text-[#37322F] font-sans">
+                  Pay with Gift Card (Optional)
+                </Label>
+                <Select value={selectedGiftCardId} onValueChange={setSelectedGiftCardId}>
+                  <SelectTrigger className="border-[#E0DEDB] focus:border-[#37322F] focus:ring-[#37322F] font-sans">
+                    <SelectValue placeholder="Select a gift card (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None - Pay with regular payment</SelectItem>
+                    {loadingGiftCards ? (
+                      <SelectItem value="loading" disabled>
+                        Loading gift cards...
+                      </SelectItem>
+                    ) : giftCards.length > 0 ? (
+                      giftCards.map((card) => (
+                        <SelectItem key={card.id} value={card.id}>
+                          {card.retailer} - ${card.current_balance.toFixed(2)} available
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No gift cards available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedGiftCardId && giftCards.length > 0 && (
+                  <p className="text-sm text-[#605A57] font-sans">
+                    {editedData.total > (giftCards.find(c => c.id === selectedGiftCardId)?.current_balance || 0)
+                      ? '⚠️ Purchase amount exceeds gift card balance'
+                      : '✓ Gift card balance is sufficient'}
+                  </p>
+                )}
               </div>
 
               {/* Items */}

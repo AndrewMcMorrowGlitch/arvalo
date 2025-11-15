@@ -175,7 +175,7 @@ export function AddReceipt() {
     }
   }
 
-  const handleConfirmReceipt = async (confirmedData: ReceiptData) => {
+  const handleConfirmReceipt = async (confirmedData: ReceiptData, giftCardId?: string) => {
     try {
       // Save to database
       const response = await fetch('/api/purchases', {
@@ -184,6 +184,7 @@ export function AddReceipt() {
         body: JSON.stringify({
           receiptData: confirmedData,
           skipExtraction: true, // We already have the extracted data
+          giftCardId: giftCardId || null, // Include gift card ID if provided
         }),
       })
 

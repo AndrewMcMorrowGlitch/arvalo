@@ -1,84 +1,119 @@
-# Fix Gift Card Form Validation Issue
+# Link Gift Cards to Purchases - Implementation Plan
 
-## Problem
-The gift card form shows "Required" errors even when all fields are filled. The form validation is preventing submission.
+## Overview
+Add functionality to optionally link purchases (from receipt uploads) to gift cards, so that the purchase amount is deducted from the selected gift card's balance.
 
-## Root Cause Analysis
-Looking at the code:
-1. The `GiftCardSchema` in `src/lib/validation/schemas.ts` (lines 125-130) validates:
-   - `retailer`: min 1 character required
-   - `card_number`: min 1 character required
-   - `pin`: min 1 character required
-   - `initial_balance`: must be positive number
+## Tasks
 
-2. The form in `add-gift-card-dialog.tsx` uses `react-hook-form` with the schema, but the `initial_balance` field has a default value of `0` (line 38), which fails the "positive" validation (must be > 0).
+### 1. Database Changes
+- [ ] Add `gift_card_id` column to `purchases` table
+  - Optional foreign key reference to `gift_cards(id)`
+  - Will be NULL for purchases not linked to gift cards
 
-3. When the form initializes with `initial_balance: 0`, it immediately fails validation since 0 is not positive.
+### 2. Frontend Changes
+- [ ] Update `ReceiptConfirmationDialog` component
+  - Add optional dropdown/select field to choose gift card
+  - Fetch user's active gift cards
+  - Display current balance for each gift card
+  - Show gift card selection as optional field
 
-## Todo Items
+### 3. Backend Changes
+- [ ] Modify `POST /api/purchases` endpoint
+  - Accept optional `gift_card_id` in request body
+  - When gift_card_id is provided:
+    - Verify user owns the gift card
+    - Check gift card has sufficient balance
+    - Deduct purchase amount from gift card balance
+    - Create transaction record in `gift_card_transactions`
+    - Update audit log
+  - Link purchase to gift card via gift_card_id field
 
-- [ ] Fix the `initial_balance` default value from `0` to `undefined`
-- [ ] Update the schema to use `.min(0.01)` instead of `.positive()` for clearer validation
-- [ ] Test the form with sample data (potato, 235235, test pin, 50)
-- [ ] Verify "Required" errors are gone and form submits successfully
+### 4. Testing
+- [ ] Test receipt upload with gift card selection
+- [ ] Test receipt upload without gift card (existing flow)
+- [ ] Verify gift card balance updates correctly
+- [ ] Check transaction history shows correctly
+
+## Technical Details
+
+**Database Migration:**
+```sql
+ALTER TABLE purchases ADD COLUMN gift_card_id UUID REFERENCES gift_cards(id) ON DELETE SET NULL;
+CREATE INDEX idx_purchases_gift_card_id ON purchases(gift_card_id);
+```
+
+**Key Files to Modify:**
+- `supabase/migrations/` - New migration file
+- `src/components/receipt-confirmation-dialog.tsx` - Add gift card dropdown
+- `src/app/api/purchases/route.ts` - Handle gift card deduction logic
+- `src/lib/validation/schemas.ts` - Update validation schema if needed
+
+## User Flow
+1. User uploads receipt → Claude extracts data
+2. User sees confirmation dialog with extracted data
+3. **NEW:** User optionally selects a gift card from dropdown
+4. User confirms → Receipt saved, gift card balance updated (if selected)
+5. Dashboard shows updated gift card balance
 
 ## Changes Made
 
-### 1. Fixed validation mode in add-gift-card-dialog.tsx
-- Added `mode: 'onBlur'` to prevent validation from running immediately on page load
-- Removed `initial_balance` from defaultValues to let the form handle empty state
-- Removed `valueAsNumber: true` from the register call
+### 1. Database Migration (✓ Complete)
+**File:** `supabase/migrations/20251115140000_add_gift_card_to_purchases.sql`
+- Added `gift_card_id` column to `purchases` table
+- Created index for faster lookups
+- Added documentation comment
 
-### 2. Updated validation in schemas.ts (line 129)
-- Changed `.positive()` to `.coerce.number().min(0.01, 'Initial balance must be at least $0.01')`
-- The `coerce` ensures the string input from the form is converted to a number
-- Provides clearer error messaging
+### 2. Frontend Changes (✓ Complete)
+**File:** `src/components/receipt-confirmation-dialog.tsx`
+- Added gift card state management (giftCards, selectedGiftCardId, loadingGiftCards)
+- Added useEffect to fetch active gift cards when dialog opens
+- Added Select dropdown UI for gift card selection
+- Shows retailer name and current balance for each card
+- Displays balance validation message (sufficient/insufficient)
+- Updated onConfirm to pass selected gift card ID
 
-### 3. Simplified onSubmit handler
-- Removed manual `Number()` conversion since zod's coerce handles it
-- Simplified the body to just `JSON.stringify(values)`
+**File:** `src/components/add-receipt.tsx`
+- Updated handleConfirmReceipt to accept and pass giftCardId parameter
 
-## Database Setup Required
+### 3. Backend Changes (✓ Complete)
+**File:** `src/app/api/purchases/route.ts`
+- Added giftCardId parameter to request body parsing
+- Added gift card validation logic:
+  - Verifies user owns the gift card
+  - Checks gift card has sufficient balance
+  - Checks gift card is active (not depleted/expired)
+- Deducts purchase amount from gift card balance
+- Updates gift card status to 'depleted' if balance reaches 0
+- Creates transaction record in gift_card_transactions table
+- Logs action to audit_log table
+- Links purchase to gift card via gift_card_id field
 
-### The gift_cards table doesn't exist yet in Supabase!
-
-**Error seen:** `Could not find the table 'public.gift_cards' in the schema cache`
-
-**To fix this, run the SQL migration:**
-
-1. Go to your Supabase Dashboard: https://supabase.com/dashboard
-2. Select your project
-3. Go to **SQL Editor** (in the left sidebar)
-4. Click **New Query**
-5. Copy and paste the entire contents of this file:
-   `/Users/kevinhao/Desktop/arvalo/supabase/migrations/20251115120000_create_gift_card_tables.sql`
-6. Click **Run** to execute the migration
-
-This will create:
-- `gift_cards` table (for storing gift card info)
-- `gift_card_transactions` table (for tracking purchases)
-- `audit_log` table (for tracking changes)
-- All necessary indexes and Row Level Security policies
-
-## Review
+## Review Section
 
 ### Summary
-Fixed TWO issues:
-1. **Form validation** - The form was validating immediately on load, showing errors before user input
-2. **Database missing** - The gift_cards table hasn't been created in Supabase yet
+Successfully implemented the ability to link purchases (from receipt uploads) to gift cards. When a user uploads a receipt, they can now optionally select a gift card to pay with. The system validates the gift card and deducts the purchase amount from its balance.
 
 ### Files Modified
-- `src/components/add-gift-card-dialog.tsx` - Fixed validation mode and field handling
-- `src/lib/validation/schemas.ts` - Updated validation with coerce for proper type conversion
+1. `supabase/migrations/20251115140000_add_gift_card_to_purchases.sql` (new)
+2. `src/components/receipt-confirmation-dialog.tsx`
+3. `src/components/add-receipt.tsx`
+4. `src/app/api/purchases/route.ts`
 
-### Next Steps
-1. ⚠️ **You need to run the SQL migration in Supabase** (see instructions above)
-2. After running the migration, refresh the page and try adding a gift card again
-3. The form validation errors should be gone, and cards should save successfully
+### Key Features
+- Optional gift card selection (doesn't affect existing receipt flow)
+- Real-time balance validation and display
+- Automatic balance deduction and status updates
+- Full audit trail via transactions and audit log
+- Error handling for insufficient balance, invalid cards, etc.
 
-### Testing (After Database Setup)
-The form should:
-- ✅ Not show validation errors on initial load
-- ✅ Only validate fields when you click away (onBlur)
-- ✅ Accept valid input (e.g., retailer: "potato", card_number: "235235", pin: "123", balance: 50)
-- ✅ Submit successfully and save to database
+### Next Steps for User
+1. Run the database migration in Supabase SQL Editor
+2. Test by uploading a receipt and selecting a gift card
+3. Verify gift card balance updates correctly in the dashboard
+
+### Design Decisions
+- Gift card selection is optional to maintain backward compatibility
+- Only shows active cards with balance > 0
+- Validates balance before processing to prevent overdrafts
+- Creates transaction records for audit trail
+- Auto-depletes gift card when balance reaches 0
