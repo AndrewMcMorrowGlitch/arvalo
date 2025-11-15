@@ -22,6 +22,11 @@ export async function GET(request: NextRequest) {
       ? `${process.env.NEXT_PUBLIC_APP_URL}/api/gmail/callback`
       : `${request.nextUrl.origin}/api/gmail/callback`)
 
+  console.log('DEBUG - redirectUri:', redirectUri)
+  console.log('DEBUG - GOOGLE_OAUTH_REDIRECT_URI:', process.env.GOOGLE_OAUTH_REDIRECT_URI)
+  console.log('DEBUG - NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL)
+  console.log('DEBUG - request.nextUrl.origin:', request.nextUrl.origin)
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,

@@ -184,10 +184,37 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
 }
 
 /**
- * Parse price from text (handles $49.99, 49.99, etc.)
+ * Parse price from text (handles $49.99, 49.99, monthly prices, etc.)
  */
 function parsePrice(priceText: string | null): number | null {
   if (!priceText) return null;
+
+  // Check for monthly/installment pricing patterns first
+  const monthlyPatterns = [
+    // "$33/mo for 24 months", "$33.25/month for 24 mo"
+    /\$?\s*(\d+\.?\d*)\s*(?:\/mo|\/month|per month)\s*(?:for|over|×|x)?\s*(\d+)\s*(?:mo|months?)/i,
+    // "24 monthly payments of $33", "24 payments of $33.25"
+    /(\d+)\s*(?:monthly\s*)?payments?\s*of\s*\$?\s*(\d+\.?\d*)/i,
+    // "$33/mo × 24", "$33.25/month x 24"
+    /\$?\s*(\d+\.?\d*)\s*(?:\/mo|\/month|per month)\s*[×x]\s*(\d+)/i,
+  ];
+
+  for (const pattern of monthlyPatterns) {
+    const match = priceText.match(pattern);
+    if (match) {
+      // Pattern 1 & 3: monthly price is first, months is second
+      // Pattern 2: months is first, monthly price is second
+      const isPattern2 = pattern.source.includes('payments?');
+      const monthlyPrice = isPattern2 ? parseFloat(match[2]) : parseFloat(match[1]);
+      const months = isPattern2 ? parseFloat(match[1]) : parseFloat(match[2]);
+
+      if (!isNaN(monthlyPrice) && !isNaN(months) && monthlyPrice > 0 && months > 0) {
+        const totalPrice = monthlyPrice * months;
+        console.log(`📊 Detected monthly pricing: $${monthlyPrice}/mo × ${months} months = $${totalPrice}`);
+        return totalPrice;
+      }
+    }
+  }
 
   // Remove currency symbols, commas, and whitespace
   const cleaned = priceText.replace(/[$,\s]/g, '');
