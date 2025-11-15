@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+function buildRedirectUri(request: NextRequest) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  const base =
+    (appUrl && (appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl)) ||
+    request.nextUrl.origin
+  return `${base}/api/gmail/callback`
+}
+
 export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID
 
@@ -12,8 +20,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const origin = request.nextUrl.origin
-  const redirectUri = `${origin}/api/gmail/callback`
+  const redirectUri = buildRedirectUri(request)
 
   const params = new URLSearchParams({
     client_id: clientId,
