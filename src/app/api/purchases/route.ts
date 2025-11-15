@@ -1,302 +1,106 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { ReceiptDataSchema, formatValidationError } from '@/lib/validation/schemas';
-import { z } from 'zod';
+import { PurchaseSchema, formatValidationError } from '@/lib/validation/schemas';
 
-/**
- * GET /api/purchases - List all purchases for authenticated user
- */
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+// This function simulates a call to an external payment processor.
+// In a real-world scenario, this would be a request to an actual service.
+async function simulateExternalPurchase(
+  cardNumber: string,
+  pin: string,
+  amount: number
+): Promise<{ success: boolean; transactionId: string; failureReason?: string }> {
+  console.log(`Simulating purchase for card ending in ${cardNumber.slice(-4)} for amount ${amount}`);
+  
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get purchases with retailer info
-    const { data: purchases, error } = await supabase
-      .from('purchases')
-      .select(`
-        *,
-        retailers (
-          name,
-          domain,
-          logo_url,
-          default_return_days,
-          has_price_match
-        ),
-        price_tracking (
-          id,
-          current_price,
-          price_drop_detected,
-          price_drop_amount
-        )
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    return NextResponse.json({
+  // Simulate a 90% success rate
+  if (Math.random() < 0.9) {
+    console.log('Simulated purchase SUCCEEDED');
+    return {
       success: true,
-      purchases,
-    });
-  } catch (error) {
-    console.error('Error fetching purchases:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch purchases',
-        details: error instanceof Error ? error.message : String(error)
-      },
-      { status: 500 }
-    );
+      transactionId: `ext_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    };
+  } else {
+    console.log('Simulated purchase FAILED');
+    return {
+      success: false,
+      transactionId: `ext_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      failureReason: 'Card declined by retailer (simulated)',
+    };
   }
 }
 
-/**
- * POST /api/purchases - Manually add a purchase
- * Supports two modes:
- * 1. Extract-only: { receiptText, extractOnly: true } - Returns extracted data without saving
- * 2. Save: { receiptData, skipExtraction: true } - Saves provided data directly
- * 3. Legacy: { receiptText } - Extracts and saves (for backward compatibility)
- */
-export async function POST(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+export async function POST(request: Request) {
+  const supabase = createClient();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { receiptText, receiptData: providedData, skipExtraction, extractOnly } = body;
-
-    // Import here to avoid circular dependencies
-    const { extractReceiptData } = await import('@/lib/claude/extract-receipt');
-    const { analyzeReturnEligibility } = await import('@/lib/claude/analyze-return');
-
-    let receiptData;
-
-    // Mode 1: Extract-only (return data without saving)
-    if (extractOnly && receiptText) {
-      receiptData = await extractReceiptData(receiptText);
-
-      // Validate extracted data before returning
-      try {
-        const validated = ReceiptDataSchema.parse(receiptData);
-        return NextResponse.json({
-          success: true,
-          extractedData: validated,
-        });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return NextResponse.json(
-            {
-              error: 'Extracted receipt data is invalid',
-              details: formatValidationError(error),
-              rawData: receiptData // Return raw data for debugging
-            },
-            { status: 400 }
-          );
-        }
-        throw error;
-      }
-    }
-
-    // Mode 2: Save provided data (from confirmation dialog)
-    if (skipExtraction && providedData) {
-      // Validate user-provided data
-      try {
-        receiptData = ReceiptDataSchema.parse(providedData);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return NextResponse.json(
-            formatValidationError(error),
-            { status: 400 }
-          );
-        }
-        throw error;
-      }
-    }
-    // Mode 3: Legacy mode - extract and save
-    else if (receiptText) {
-      const extracted = await extractReceiptData(receiptText);
-      // Validate extracted data
-      try {
-        receiptData = ReceiptDataSchema.parse(extracted);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return NextResponse.json(
-            {
-              error: 'Extracted receipt data is invalid',
-              details: formatValidationError(error),
-              rawData: extracted // Return raw data for debugging
-            },
-            { status: 400 }
-          );
-        }
-        throw error;
-      }
-    } else {
-      return NextResponse.json(
-        { error: 'Either receiptText or receiptData is required' },
-        { status: 400 }
-      );
-    }
-
-    // Find retailer
-    const { data: retailers } = await supabase
-      .from('retailers')
-      .select('*')
-      .ilike('name', `%${receiptData.merchant}%`)
-      .limit(1);
-
-    let retailer = retailers && retailers.length > 0 ? retailers[0] : null;
-
-    // If retailer doesn't exist, create a basic one without policy (skip scraping for speed)
-    if (!retailer) {
-      console.log(`Creating basic retailer entry for ${receiptData.merchant}...`);
-      try {
-        const { data: newRetailer } = await supabase
-          .from('retailers')
-          .insert({
-            name: receiptData.merchant,
-            default_return_days: 30, // Default assumption
-            has_price_match: false,
-          })
-          .select()
-          .single();
-
-        retailer = newRetailer;
-        console.log(`Created basic retailer entry for ${receiptData.merchant}`);
-      } catch (error) {
-        console.error('Failed to create retailer:', error);
-        // Continue without retailer
-      }
-    }
-
-    // Calculate return deadline
-    const returnDays = retailer?.default_return_days || 30;
-    const purchaseDate = new Date(receiptData.date);
-    const returnDeadline = new Date(purchaseDate);
-    returnDeadline.setDate(returnDeadline.getDate() + returnDays);
-
-    // Skip slow policy scraping and AI analysis for faster user response
-    // These can be done later via a background job or cron
-    let claudeAnalysis = null;
-
-    // Save purchase
-    const { data: purchase, error } = await supabase
-      .from('purchases')
-      .insert({
-        user_id: user.id,
-        ocr_raw_text: receiptText,
-        merchant_name: receiptData.merchant,
-        retailer_id: retailer?.id,
-        purchase_date: receiptData.date,
-        total_amount: receiptData.total,
-        currency: receiptData.currency,
-        items: receiptData.items,
-        return_deadline: returnDeadline.toISOString().split('T')[0],
-        return_window_days: returnDays,
-        claude_analysis: claudeAnalysis,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Create notification
-    await supabase.from('notifications').insert({
-      user_id: user.id,
-      purchase_id: purchase.id,
-      type: 'return_expiring',
-      title: 'New Purchase Tracked',
-      message: `Your ${receiptData.merchant} purchase ($${receiptData.total}) will expire on ${returnDeadline.toLocaleDateString()}`,
-      priority: 'normal',
-    });
-
-    return NextResponse.json({
-      success: true,
-      purchase,
-      receiptData,
-      analysis: claudeAnalysis,
-    });
-  } catch (error) {
-    console.error('Error creating purchase:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to create purchase',
-        details: error instanceof Error ? error.message : String(error)
-      },
-      { status: 500 }
-    );
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-}
 
-/**
- * DELETE /api/purchases - Delete a purchase and its associated price tracking
- */
-export async function DELETE(request: NextRequest) {
-  try {
-    const supabase = await createClient();
+  const body = await request.json();
+  const validation = PurchaseSchema.safeParse(body);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  if (!validation.success) {
+    return NextResponse.json(formatValidationError(validation.error), { status: 400 });
+  }
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const { gift_card_id, amount, item_description, item_id } = validation.data;
 
-    const { searchParams } = new URL(request.url);
-    const purchaseId = searchParams.get('id');
+  // Step 1: Initiate the purchase and lock the card
+  const { data: initiatedData, error: initiatedError } = await supabase.rpc('initiate_purchase', {
+    p_gift_card_id: gift_card_id,
+    p_purchase_amount: amount,
+    p_item_description: item_description,
+    p_item_id: item_id,
+    p_user_id: user.id,
+  }).single();
 
-    if (!purchaseId) {
-      return NextResponse.json({ error: 'Missing purchase ID' }, { status: 400 });
-    }
+  if (initiatedError || (initiatedData && initiatedData.status === 'error')) {
+    console.error('Error initiating purchase:', initiatedError || initiatedData.error_message);
+    return NextResponse.json({ error: initiatedData?.error_message || 'Failed to initiate purchase.' }, { status: 400 });
+  }
 
-    // Verify purchase belongs to user
-    const { data: purchase } = await supabase
-      .from('purchases')
-      .select('*')
-      .eq('id', purchaseId)
-      .eq('user_id', user.id)
-      .single();
+  const { purchase_id, card_number, pin } = initiatedData;
 
-    if (!purchase) {
-      return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
-    }
+  // Step 2: Call the external purchase API
+  // In a real app, you would never pass decrypted credentials like this.
+  // This is a placeholder for a secure integration with a payment provider.
+  const externalResult = await simulateExternalPurchase(card_number, pin, amount);
 
-    // Delete associated price tracking first (if any)
-    await supabase
-      .from('price_tracking')
-      .delete()
-      .eq('purchase_id', purchaseId);
+  // Step 3: Finalize the purchase
+  const { data: finalizedData, error: finalizedError } = await supabase.rpc('finalize_purchase', {
+    p_purchase_id: purchase_id,
+    p_is_success: externalResult.success,
+    p_failure_reason: externalResult.failureReason,
+    p_external_transaction_id: externalResult.transactionId,
+    p_user_id: user.id,
+  }).single();
 
-    // Delete the purchase
-    const { error } = await supabase
-      .from('purchases')
-      .delete()
-      .eq('id', purchaseId);
+  if (finalizedError || (finalizedData && finalizedData.error_message)) {
+    console.error('Critical error finalizing purchase:', finalizedError || finalizedData.error_message);
+    // If finalization fails, we have a pending purchase that needs manual intervention.
+    // This is a critical error that should be alerted on.
+    return NextResponse.json({ error: 'A critical error occurred while finalizing the purchase. Please contact support.' }, { status: 500 });
+  }
 
-    if (error) throw error;
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Failed to delete purchase:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete purchase', details: String(error) },
-      { status: 500 }
-    );
+  // Step 4: Return the final result
+  if (finalizedData.purchase_status === 'completed') {
+    return NextResponse.json({
+      status: 'completed',
+      purchase_id: purchase_id,
+      balance_after: finalizedData.final_balance,
+    });
+  } else {
+    return NextResponse.json({
+      status: 'failed',
+      purchase_id: purchase_id,
+      failure_reason: externalResult.failureReason,
+      balance_after: finalizedData.final_balance,
+    }, { status: 400 });
   }
 }

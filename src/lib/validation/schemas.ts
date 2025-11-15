@@ -122,6 +122,20 @@ export const ProductUrlSchema = z.string()
 export const UuidSchema = z.string()
   .uuid('Invalid ID format');
 
+export const GiftCardSchema = z.object({
+  retailer: z.string().min(1, 'Retailer is required').max(100),
+  card_number: z.string().min(1, 'Card number is required').max(100),
+  pin: z.string().min(1, 'PIN is required').max(100),
+  initial_balance: z.number().positive('Initial balance must be a positive number'),
+});
+
+export const PurchaseSchema = z.object({
+  gift_card_id: z.string().uuid(),
+  amount: z.number().positive(),
+  item_description: z.string().optional(),
+  item_id: z.string().optional(),
+});
+
 /**
  * Refund type validation
  */
