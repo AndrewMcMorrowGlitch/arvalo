@@ -23,13 +23,25 @@ export async function checkProductPrice(
   let scrapingBrowserError: Error | null = null;
 
   // Try Bright Data first, fallback to Claude AI if it fails
-  const skipBrightData = false;
+  // TEMPORARY: Skip Bright Data due to timeout issues with Best Buy
+  const skipBrightData = true;
 
   if (!skipBrightData) {
-    // Try Bright Data Scraping Browser first
+    // Try Bright Data Scraping Browser first with 60s timeout
+    // (needs to account for retries: 3 attempts × 30s + backoff delays)
     try {
       console.log('Using Bright Data Scraping Browser for:', productUrl);
-      return await scrapeWithBrowser(productUrl);
+
+      // Add timeout to prevent hanging - 60s to allow for retries
+      const SCRAPING_TIMEOUT_MS = 60000; // 60 seconds
+      const timeoutPromise = new Promise<PriceCheckResult>((_, reject) => {
+        setTimeout(() => reject(new Error('Bright Data scraping timeout after 60 seconds')), SCRAPING_TIMEOUT_MS);
+      });
+
+      return await Promise.race([
+        scrapeWithBrowser(productUrl),
+        timeoutPromise
+      ]);
     } catch (error) {
       scrapingBrowserError = error as Error;
       logError(error, 'checkProductPrice - Scraping Browser');
@@ -39,10 +51,20 @@ export async function checkProductPrice(
     console.log('Bright Data not configured, using Claude AI directly for:', productUrl);
   }
 
-  // Fallback to Claude AI scraper
+  // Fallback to Claude AI scraper with timeout
   try {
     console.log('Using Claude AI scraper for:', productUrl);
-    return await scrapeProductPrice(productUrl);
+
+    // Add timeout to Claude AI scraper as well
+    const CLAUDE_TIMEOUT_MS = 90000; // 90 seconds (fetch has 60s + API processing)
+    const claudeTimeoutPromise = new Promise<PriceCheckResult>((_, reject) => {
+      setTimeout(() => reject(new Error('Claude AI scraping timeout after 90 seconds')), CLAUDE_TIMEOUT_MS);
+    });
+
+    return await Promise.race([
+      scrapeProductPrice(productUrl),
+      claudeTimeoutPromise
+    ]);
   } catch (error) {
     logError(error, 'checkProductPrice - Claude scraper');
     console.error('Claude scraper also failed:', error);
