@@ -55,6 +55,8 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
     | 'warranty'
   >('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMessage, setImportMessage] = useState<string | null>(null)
 
   const navItems = [
     { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
@@ -67,6 +69,33 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
     { id: 'duplicate' as const, label: 'Duplicate charges', icon: AlertCircle },
     { id: 'warranty' as const, label: 'Warranty tracking', icon: Shield },
   ]
+
+  const handleImportFromGmail = async () => {
+    try {
+      setImporting(true)
+      setImportMessage(null)
+
+      const response = await fetch('/api/gmail/import', {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import receipts from Gmail')
+      }
+
+      setImportMessage(
+        `Imported ${data.imported || 0} receipt${(data.imported || 0) === 1 ? '' : 's'} from Gmail.`,
+      )
+    } catch (error: any) {
+      setImportMessage(
+        error?.message || 'Failed to import receipts from Gmail. Please try again.',
+      )
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const quickActions = [
     {
@@ -192,7 +221,22 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex-1" />
+          <div className="flex-1 flex justify-end items-center gap-3">
+            <a
+              href="/api/gmail/connect"
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              Connect Gmail
+            </a>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleImportFromGmail}
+              disabled={importing}
+            >
+              {importing ? 'Importing…' : 'Import receipts'}
+            </Button>
+          </div>
         </header>
 
         {/* Content Area */}
@@ -354,4 +398,3 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
     </div>
   )
 }
-
