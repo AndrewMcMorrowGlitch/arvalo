@@ -111,7 +111,7 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
         ];
 
         for (const pattern of pricePatterns) {
-          const matches = [...bodyText.matchAll(pattern)];
+          const matches = Array.from(bodyText.matchAll(pattern));
           if (matches.length > 0) {
             // Return the first reasonable price (not 0, not too high)
             for (const match of matches) {

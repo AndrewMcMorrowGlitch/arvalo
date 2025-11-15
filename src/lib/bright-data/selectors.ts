@@ -209,7 +209,7 @@ export async function trySelectors(
       for (const selector of selectorList) {
         try {
           const elements = document.querySelectorAll(selector);
-          for (const el of elements) {
+          for (const el of Array.from(elements)) {
             if (attr) {
               const value = el.getAttribute(attr);
               if (value) return value;
