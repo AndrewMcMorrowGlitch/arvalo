@@ -31,11 +31,11 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
 
   const form = useForm<GiftCardFormData>({
     resolver: zodResolver(GiftCardSchema),
+    mode: 'onBlur',
     defaultValues: {
       retailer: '',
       card_number: '',
       pin: '',
-      initial_balance: 0,
     },
   })
 
@@ -46,10 +46,7 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
       const response = await fetch('/api/gift-cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...values,
-          initial_balance: Number(values.initial_balance)
-        }),
+        body: JSON.stringify(values),
       })
 
       if (response.ok) {
@@ -100,7 +97,7 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
           </div>
           <div className="space-y-2">
             <Label htmlFor="initial_balance">Initial Balance ($)</Label>
-            <Input id="initial_balance" type="number" step="0.01" {...form.register('initial_balance', { valueAsNumber: true })} />
+            <Input id="initial_balance" type="number" step="0.01" {...form.register('initial_balance')} />
             {form.formState.errors.initial_balance && (
               <p className="text-red-500 text-xs">{form.formState.errors.initial_balance.message}</p>
             )}
