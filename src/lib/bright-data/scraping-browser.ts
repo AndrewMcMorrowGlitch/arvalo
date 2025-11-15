@@ -117,7 +117,8 @@ export async function navigateToUrl(
         ...options,
         timeout: 60000,
       });
-      await page.waitForTimeout(2000);
+      // Simple delay to allow dynamic content to settle
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       return; // Success
     } catch (error) {
       lastError = error as Error;

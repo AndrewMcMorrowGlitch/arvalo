@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { checkProductPrice } from '@/lib/bright-data/price-tracker'
+import {
+  checkProductPrice,
+  type PriceCheckResult,
+} from '@/lib/bright-data/price-tracker'
 
 const RETAILER_TARGETS = [
   {
@@ -166,12 +169,20 @@ function qualifies(originalPrice: number, candidatePrice: number) {
   return savings >= MIN_SAVINGS_DOLLARS || percent >= MIN_SAVINGS_PERCENT
 }
 
-async function checkPriceWithTimeout(url: string) {
-  return Promise.race([
+async function checkPriceWithTimeout(url: string): Promise<PriceCheckResult> {
+  return Promise.race<PriceCheckResult>([
     checkProductPrice(url),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Price check timed out after ${PRICE_CHECK_TIMEOUT_MS / 1000}s`)), PRICE_CHECK_TIMEOUT_MS)
-    ),
+    new Promise<PriceCheckResult>((_, reject) => {
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Price check timed out after ${PRICE_CHECK_TIMEOUT_MS / 1000}s`,
+            ),
+          ),
+        PRICE_CHECK_TIMEOUT_MS,
+      )
+    }),
   ])
 }
 
