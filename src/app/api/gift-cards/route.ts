@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { GiftCardSchema, formatValidationError } from '@/lib/validation/schemas';
 
 export async function GET(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },

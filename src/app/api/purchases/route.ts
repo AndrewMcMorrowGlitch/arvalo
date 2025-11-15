@@ -32,7 +32,7 @@ async function simulateExternalPurchase(
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     p_item_description: item_description,
     p_item_id: item_id,
     p_user_id: user.id,
-  }).single();
+  }).single() as { data: any; error: any };
 
   if (initiatedError || (initiatedData && initiatedData.status === 'error')) {
     console.error('Error initiating purchase:', initiatedError || initiatedData.error_message);
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     p_failure_reason: externalResult.failureReason,
     p_external_transaction_id: externalResult.transactionId,
     p_user_id: user.id,
-  }).single();
+  }).single() as { data: any; error: any };
 
   if (finalizedError || (finalizedData && finalizedData.error_message)) {
     console.error('Critical error finalizing purchase:', finalizedError || finalizedData.error_message);

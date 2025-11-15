@@ -25,9 +25,15 @@ export default function LandingHeader() {
             <a href="#products" className="text-[#605A57] hover:text-[#37322F] transition-colors text-sm font-medium">
               Features
             </a>
-            <a href="#pricing" className="text-[#605A57] hover:text-[#37322F] transition-colors text-sm font-medium">
+            <a href="#pricing" className="text-[#605A57] hover:text-[#322F] transition-colors text-sm font-medium">
               Pricing
             </a>
+            <Link
+              href="/login"
+              className="px-6 py-2 text-[#37322F] rounded-full hover:bg-[#EAE8E5] transition-colors text-sm font-medium"
+            >
+              Login
+            </Link>
             <Link
               href="/dashboard"
               className="px-6 py-2 bg-[#37322F] text-white rounded-full hover:bg-[#2A2520] transition-colors text-sm font-medium"
@@ -63,6 +69,13 @@ export default function LandingHeader() {
               >
                 Pricing
               </a>
+              <Link
+                href="/login"
+                className="px-6 py-2 text-[#37322F] rounded-full hover:bg-[#EAE8E5] transition-colors text-sm font-medium text-center"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Login
+              </Link>
               <Link
                 href="/dashboard"
                 className="px-6 py-2 bg-[#37322F] text-white rounded-full hover:bg-[#2A2520] transition-colors text-sm font-medium text-center"
