@@ -20,11 +20,17 @@ let browserInstance: Browser | null = null;
 
 /**
  * Connect to Bright Data Scraping Browser
- * Reuses existing connection if available
+ * Creates a fresh connection each time to avoid navigation limits
  */
 export async function connectScrapingBrowser(): Promise<Browser> {
-  if (browserInstance && browserInstance.connected) {
-    return browserInstance;
+  // Always disconnect any existing instance first to prevent navigation limit issues
+  if (browserInstance) {
+    try {
+      await browserInstance.disconnect();
+    } catch (e) {
+      // Ignore errors from disconnecting already-closed browsers
+    }
+    browserInstance = null;
   }
 
   try {

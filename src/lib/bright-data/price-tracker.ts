@@ -91,10 +91,13 @@ export async function checkProductPrice(
  * Scrape product price using Bright Data Scraping Browser
  */
 async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> {
-  const browser = await connectScrapingBrowser();
-  const page = await createPage(browser);
+  let browser;
+  let page;
 
   try {
+    browser = await connectScrapingBrowser();
+    page = await createPage(browser);
+
     // Navigate to product page
     await navigateToUrl(page, productUrl);
 
@@ -171,7 +174,12 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
       timestamp: new Date().toISOString(),
     };
   } finally {
-    await page.close();
+    // Close page and disconnect browser to prevent navigation limit issues
+    if (page) await page.close();
+    if (browser) {
+      await browser.disconnect();
+      console.log('Disconnected from Bright Data Scraping Browser');
+    }
   }
 }
 
