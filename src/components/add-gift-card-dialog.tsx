@@ -36,6 +36,7 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
       retailer: '',
       card_number: '',
       pin: '',
+      initial_balance: undefined,
     },
   })
 
@@ -89,15 +90,21 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pin">PIN</Label>
-            <Input id="pin" type="password" {...form.register('pin')} />
+            <Label htmlFor="pin">PIN (Optional)</Label>
+            <Input id="pin" type="password" placeholder="Enter PIN if required" {...form.register('pin')} />
             {form.formState.errors.pin && (
               <p className="text-red-500 text-xs">{form.formState.errors.pin.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="initial_balance">Initial Balance ($)</Label>
-            <Input id="initial_balance" type="number" step="0.01" {...form.register('initial_balance')} />
+            <Label htmlFor="initial_balance">Initial Balance (Optional)</Label>
+            <Input
+              id="initial_balance"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              {...form.register('initial_balance')}
+            />
             {form.formState.errors.initial_balance && (
               <p className="text-red-500 text-xs">{form.formState.errors.initial_balance.message}</p>
             )}

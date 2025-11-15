@@ -125,8 +125,16 @@ export const UuidSchema = z.string()
 export const GiftCardSchema = z.object({
   retailer: z.string().min(1, 'Retailer is required').max(100),
   card_number: z.string().min(1, 'Card number is required').max(100),
-  pin: z.string().min(1, 'PIN is required').max(100),
-  initial_balance: z.coerce.number().min(0.01, 'Initial balance must be at least $0.01'),
+  pin: z.string().optional(),
+  initial_balance: z.preprocess(
+    (val) => {
+      // Handle empty strings and convert to number
+      if (val === '' || val === null || val === undefined) return undefined;
+      const num = Number(val);
+      return isNaN(num) ? undefined : num;
+    },
+    z.number().min(0, 'Initial balance must be at least $0').optional().default(0)
+  ),
 });
 
 export const GiftCardPurchaseSchema = z.object({
