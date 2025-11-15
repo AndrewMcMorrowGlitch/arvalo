@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ReceiptDataSchema, formatValidationError } from '@/lib/validation/schemas';
 import { z } from 'zod';
+import {
+  detectRecurrentPurchases,
+  extractPurchaseData,
+  notifyFrontend,
+  savePurchase,
+  updateRecurrentPurchases,
+} from '@/lib/recurrent'
 
 /**
  * GET /api/purchases - List all purchases for authenticated user
@@ -78,7 +85,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { receiptText, receiptData: providedData, skipExtraction, extractOnly } = body;
+    const {
+      receiptText,
+      receiptData: providedData,
+      skipExtraction,
+      extractOnly,
+      giftCardUsage,
+    } = body;
 
     // Import here to avoid circular dependencies
     const { extractReceiptData } = await import('@/lib/claude/extract-receipt');
@@ -214,6 +227,109 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) throw error;
+
+    // Apply gift card usage if provided
+    if (giftCardUsage?.gift_card_id && giftCardUsage?.amount) {
+      const usageAmount = Number(giftCardUsage.amount)
+      if (isNaN(usageAmount) || usageAmount <= 0) {
+        return NextResponse.json({ error: 'Invalid gift card amount' }, { status: 400 })
+      }
+      if (usageAmount > receiptData.total + 0.001) {
+        return NextResponse.json(
+          { error: 'Gift card amount cannot exceed the receipt total' },
+          { status: 400 }
+        )
+      }
+
+      const { data: giftCard, error: giftCardError } = await supabase
+        .from('gift_cards')
+        .select('*')
+        .eq('id', giftCardUsage.gift_card_id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (giftCardError || !giftCard) {
+        return NextResponse.json({ error: 'Gift card not found' }, { status: 404 })
+      }
+
+      const currentBalance = Number(giftCard.current_balance)
+      if (currentBalance < usageAmount - 0.001) {
+        return NextResponse.json(
+          { error: 'Gift card does not have sufficient balance' },
+          { status: 400 }
+        )
+      }
+
+      const newBalance = Number((currentBalance - usageAmount).toFixed(2))
+      const newStatus =
+        newBalance <= 0.001 ? 'depleted' : giftCard.status
+
+      const { error: updateError } = await supabase
+        .from('gift_cards')
+        .update({
+          current_balance: newBalance,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', giftCard.id)
+
+      if (updateError) {
+        console.error('Failed to update gift card balance:', updateError)
+        throw updateError
+      }
+
+      const { data: transaction, error: transactionError } = await supabase
+        .from('gift_card_transactions')
+        .insert({
+          gift_card_id: giftCard.id,
+          amount: usageAmount,
+          item_description: `Purchase at ${receiptData.merchant}`,
+          item_id: purchase.id,
+          status: 'completed',
+          failure_reason: null,
+          balance_before: currentBalance,
+          balance_after: newBalance,
+          completed_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (transactionError) {
+        console.error('Failed to create gift card transaction:', transactionError)
+        // Attempt to roll back balance
+        await supabase
+          .from('gift_cards')
+          .update({
+            current_balance: currentBalance,
+            status: giftCard.status,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', giftCard.id)
+        throw transactionError
+      }
+
+      await supabase.from('audit_log').insert({
+        user_id: user.id,
+        gift_card_id: giftCard.id,
+        purchase_id: transaction.id,
+        action: 'purchase_completed',
+        details: {
+          purchase_id: purchase.id,
+          amount: usageAmount,
+          merchant: receiptData.merchant,
+        },
+      })
+    }
+
+    try {
+      const purchaseSummary = extractPurchaseData(receiptData)
+      await savePurchase(supabase, user.id, purchaseSummary)
+      const recurrentCandidates = await detectRecurrentPurchases(supabase, user.id)
+      const newItems = await updateRecurrentPurchases(supabase, user.id, recurrentCandidates)
+      await notifyFrontend(supabase, user.id, newItems)
+    } catch (recurrentError) {
+      console.error('Recurrent purchase pipeline failed:', recurrentError)
+    }
 
     // Create notification
     await supabase.from('notifications').insert({

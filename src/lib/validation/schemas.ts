@@ -124,8 +124,8 @@ export const UuidSchema = z.string()
 
 export const GiftCardSchema = z.object({
   retailer: z.string().min(1, 'Retailer is required').max(100),
-  card_number: z.string().min(1, 'Card number is required').max(100),
-  pin: z.string().optional(),
+  card_number: z.string().max(100).optional(),
+  pin: z.string().max(100).optional(),
   initial_balance: z.preprocess(
     (val) => {
       // Handle empty strings and convert to number

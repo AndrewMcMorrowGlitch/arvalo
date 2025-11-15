@@ -51,17 +51,20 @@ export async function POST(request: Request) {
     return NextResponse.json(formatValidationError(validation.error), { status: 400 });
   }
 
-  const { retailer, card_number, pin, initial_balance } = validation.data;
+  const retailer = validation.data.retailer.trim()
+  const cardNumber = (validation.data.card_number ?? '').trim() || 'N/A'
+  const pin = (validation.data.pin ?? '').trim() || 'N/A'
+  const initialBalance = validation.data.initial_balance;
 
   const { data: newGiftCard, error: insertError } = await supabase
     .from('gift_cards')
     .insert({
       user_id: user.id,
       retailer,
-      card_number, // TODO: Encrypt this value
+      card_number: cardNumber, // TODO: Encrypt this value
       pin, // TODO: Encrypt this value
-      initial_balance,
-      current_balance: initial_balance,
+      initial_balance: initialBalance,
+      current_balance: initialBalance,
     })
     .select()
     .single();
@@ -79,7 +82,7 @@ export async function POST(request: Request) {
     action: 'card_added',
     details: {
       retailer,
-      initial_balance,
+      initial_balance: initialBalance,
     },
   });
 
