@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Calendar,
   Sparkles,
@@ -14,22 +14,61 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AnimatePresence, motion } from 'framer-motion'
 
+type Purchase = {
+  id: string
+  merchant_name: string
+  total_amount: number
+  purchase_date: string
+}
+
+type CalendarPurchase = {
+  date: Date
+  name: string
+  price: number
+  type: 'past' | 'planned'
+}
+
 export function RecurrentPurchases() {
-  const [currentMonth, setCurrentMonth] = useState(new Date(2025, 10))
+  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedPurchase, setSelectedPurchase] = useState<any | null>(null)
   const [editingPurchase, setEditingPurchase] = useState<any | null>(null)
   const [hoveredDay, setHoveredDay] = useState<number | null>(null)
+  const [purchases, setPurchases] = useState<CalendarPurchase[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const purchases = [
-    { date: new Date(2025, 10, 3), name: 'Organic Milk', price: 4.99, type: 'past' },
-    { date: new Date(2025, 10, 10), name: 'Organic Milk', price: 4.99, type: 'past' },
-    { date: new Date(2025, 10, 17), name: 'Organic Milk', price: 4.99, type: 'planned' },
-    { date: new Date(2025, 10, 24), name: 'Organic Milk', price: 4.99, type: 'planned' },
-    { date: new Date(2025, 10, 5), name: 'Coffee Beans', price: 15.99, type: 'past' },
-    { date: new Date(2025, 10, 19), name: 'Coffee Beans', price: 15.99, type: 'planned' },
-    { date: new Date(2025, 10, 1), name: 'Laundry Detergent', price: 12.99, type: 'past' },
-    { date: new Date(2025, 10, 22), name: 'Laundry Detergent', price: 12.99, type: 'planned' },
-  ]
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/purchases')
+        const data = await res.json()
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load purchases')
+        }
+        const apiPurchases = (data.purchases || []) as Purchase[]
+
+        const mapped: CalendarPurchase[] = apiPurchases
+          .filter((p) => p.purchase_date)
+          .map((p) => ({
+            date: new Date(p.purchase_date),
+            name: p.merchant_name,
+            price: p.total_amount,
+            type: 'past',
+          }))
+
+        setPurchases(mapped)
+      } catch (err: any) {
+        console.error('Error loading purchases for calendar:', err)
+        setError(err?.message || 'Failed to load purchases for calendar')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    load()
+  }, [])
 
   const recommendations = [
     {
@@ -104,9 +143,15 @@ export function RecurrentPurchases() {
           Recurrent purchases
         </h1>
         <p className="text-gray-600">
-          AI-powered tracking and buy cycle recommendations
+          Calendar view of your past purchases
         </p>
       </div>
+
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2">
+          {error}
+        </div>
+      )}
 
       {/* Calendar */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -386,4 +431,3 @@ export function RecurrentPurchases() {
     </div>
   )
 }
-
