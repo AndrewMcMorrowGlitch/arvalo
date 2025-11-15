@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-function buildRedirectUri(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  const base =
-    (appUrl && (appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl)) ||
-    request.nextUrl.origin
-  return `${base}/api/gmail/callback`
-}
+// Force this route to be evaluated at request time
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
@@ -35,7 +30,9 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const redirectUri = buildRedirectUri(request)
+  // Must exactly match the redirect URI used in /api/gmail/connect
+  const origin = request.nextUrl.origin
+  const redirectUri = `${origin}/api/gmail/callback`
 
   try {
     // Exchange code for tokens
