@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { MODELS } from '@/lib/anthropic';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -207,7 +208,7 @@ export async function scrapeProductPrice(
 
     // Use Claude Haiku (cheaper, faster, less tokens) to extract price information from HTML
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-haiku-20241022', // Use Haiku instead of Sonnet (cheaper + faster)
+      model: MODELS.HAIKU, // Use centralized model config
       max_tokens: 500, // Reduced from 1000
       messages: [
         {
