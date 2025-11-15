@@ -1,29 +1,19 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
-function getRedirectUri() {
-  const explicit = process.env.GOOGLE_OAUTH_REDIRECT_URI
-  if (explicit) return explicit
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!appUrl) return null
-
-  const trimmed = appUrl.endsWith('/') ? appUrl.slice(0, -1) : appUrl
-  return `${trimmed}/api/gmail/callback`
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID
-  const redirectUri = getRedirectUri()
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     return NextResponse.json(
       {
-        error:
-          'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and either GOOGLE_OAUTH_REDIRECT_URI or NEXT_PUBLIC_APP_URL.',
+        error: 'Google OAuth is not configured. Set GOOGLE_CLIENT_ID in your environment.',
       },
       { status: 500 },
     )
   }
+
+  const origin = request.nextUrl.origin
+  const redirectUri = `${origin}/api/gmail/callback`
 
   const params = new URLSearchParams({
     client_id: clientId,
