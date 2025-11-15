@@ -1,9 +1,15 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { TrendingDown } from 'lucide-react'
+import { TrendingDown, MoreVertical, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RefundDialog } from '@/components/refund-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type PriceTracking = {
   id: string
@@ -44,6 +50,7 @@ export function PriceDrops() {
   const [error, setError] = useState<string | null>(null)
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
   const [refundDialogOpen, setRefundDialogOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +95,32 @@ export function PriceDrops() {
 
     load()
   }, [])
+
+  const handleDelete = async (purchaseId: string) => {
+    if (!confirm('Are you sure you want to delete this purchase? This action cannot be undone.')) {
+      return
+    }
+
+    setDeletingId(purchaseId)
+
+    try {
+      const res = await fetch(`/api/purchases?id=${purchaseId}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to delete purchase')
+      }
+
+      // Remove from local state
+      setDrops((prev) => prev.filter((d) => d.purchase.id !== purchaseId))
+    } catch (err: any) {
+      console.error('Error deleting purchase:', err)
+      alert('Failed to delete purchase. Please try again.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const totalSavings = drops.reduce((sum, d) => sum + d.savings, 0)
 
@@ -168,6 +201,23 @@ export function PriceDrops() {
                   >
                     Start refund
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(drop.purchase.id)}
+                        disabled={deletingId === drop.purchase.id}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {deletingId === drop.purchase.id ? 'Deleting...' : 'Delete purchase'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>

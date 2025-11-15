@@ -1,8 +1,14 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { RotateCcw, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { RotateCcw, AlertTriangle, CheckCircle2, Clock, MoreVertical, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 type Purchase = {
   id: string
@@ -24,6 +30,7 @@ export function ReturnTracking() {
   const [items, setItems] = useState<ReturnItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -73,6 +80,32 @@ export function ReturnTracking() {
 
     load()
   }, [])
+
+  const handleDelete = async (purchaseId: string) => {
+    if (!confirm('Are you sure you want to delete this purchase? This action cannot be undone.')) {
+      return
+    }
+
+    setDeletingId(purchaseId)
+
+    try {
+      const res = await fetch(`/api/purchases?id=${purchaseId}`, {
+        method: 'DELETE',
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to delete purchase')
+      }
+
+      // Remove from local state
+      setItems((prev) => prev.filter((item) => item.id !== purchaseId))
+    } catch (err: any) {
+      console.error('Error deleting purchase:', err)
+      alert('Failed to delete purchase. Please try again.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const summary = {
     urgent: items.filter((r) => r.status === 'urgent').length,
@@ -209,6 +242,23 @@ export function ReturnTracking() {
                       : `${ret.daysLeft} day${ret.daysLeft === 1 ? '' : 's'}`}
                   </div>
                 </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(ret.id)}
+                      disabled={deletingId === ret.id}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {deletingId === ret.id ? 'Deleting...' : 'Delete purchase'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}

@@ -118,8 +118,32 @@ async function scrapeWithBrowser(productUrl: string): Promise<PriceCheckResult> 
 
     console.log('Scraping Browser extracted:', { priceText, title, imageUrl, availabilityText });
 
-    // Parse price
+    // Parse price - if we get a suspiciously low price, try to find all prices on the page
     let price = parsePrice(priceText);
+
+    // If price is suspiciously low (< $10), try to find all prices on page and pick the highest reasonable one
+    if (!price || price < 10) {
+      console.log('Price seems low or missing, searching for all prices on page...');
+      const allPrices = await page.evaluate(() => {
+        const bodyText = document.body.innerText;
+        const pricePattern = /\$\s*(\d{1,5}(?:,\d{3})*(?:\.\d{2})?)/g;
+        const matches = Array.from(bodyText.matchAll(pricePattern));
+        return matches.map(m => m[0]).filter((p, i, arr) => arr.indexOf(p) === i); // unique prices
+      });
+
+      console.log('All prices found on page:', allPrices);
+
+      // Parse all prices and pick the highest one that's reasonable (between $10 and $100,000)
+      const parsedPrices = allPrices
+        .map(p => parsePrice(p))
+        .filter((p): p is number => p !== null && p >= 10 && p < 100000)
+        .sort((a, b) => b - a); // Sort descending
+
+      if (parsedPrices.length > 0) {
+        price = parsedPrices[0]; // Take the highest price
+        console.log(`Selected highest reasonable price: $${price}`);
+      }
+    }
 
     // If no price found with selectors, try to find it in page text
     if (!price) {

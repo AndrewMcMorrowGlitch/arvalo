@@ -120,6 +120,35 @@ export const RETAILER_SELECTORS: Record<string, RetailerSelectors> = {
     availability: ['div[data-test="product-availability"]', '.availability-preview'],
   },
 
+  // Apple
+  'apple.com': {
+    price: [
+      'span[data-autom="purchaseGroupOptionfullPrice"]',
+      'span[data-autom="price"]',
+      '.rc-inline-price .current_price',
+      '.as-price-currentprice',
+      '[data-autom="productPrice"]',
+      'span.as-price-installments',
+      '[class*="price"]',
+    ],
+    title: [
+      'h1[data-autom="productName"]',
+      'h1.as-productheader-title',
+      'h1',
+      '[data-autom="headline"]',
+    ],
+    image: [
+      'img[data-autom="productImage"]',
+      '.as-productinfosection img',
+      'picture img',
+    ],
+    availability: [
+      '[data-autom="deliveryMsg"]',
+      '.as-purchaseinfo-availability',
+      'button[data-autom="add-to-cart"]',
+    ],
+  },
+
   // Generic fallback selectors (works for many sites)
   default: {
     price: [
