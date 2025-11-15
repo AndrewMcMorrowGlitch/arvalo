@@ -123,17 +123,17 @@ export const UuidSchema = z.string()
   .uuid('Invalid ID format');
 
 export const GiftCardSchema = z.object({
-  retailer: z.string().min(1, 'Retailer is required').max(100),
-  card_number: z.string().max(100).optional(),
-  pin: z.string().max(100).optional(),
+  retailer: z.string().min(1, 'Retailer name is required').max(100).transform(val => val.trim()),
+  card_number: z.string().max(100).optional().transform(val => val?.trim() || undefined),
+  pin: z.string().max(100).optional().transform(val => val?.trim() || undefined),
   initial_balance: z.preprocess(
     (val) => {
       // Handle empty strings and convert to number
-      if (val === '' || val === null || val === undefined) return undefined;
+      if (val === '' || val === null || val === undefined) return 0;
       const num = Number(val);
-      return isNaN(num) ? undefined : num;
+      return isNaN(num) ? 0 : num;
     },
-    z.number().min(0, 'Initial balance must be at least $0').optional().default(0)
+    z.number().min(0).optional().default(0)
   ),
 });
 
