@@ -12,6 +12,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Loader2, Plus, X, CheckCircle2 } from 'lucide-react'
 
 interface ReceiptItem {
@@ -36,13 +43,24 @@ interface SavedPurchaseSummary {
   items?: ReceiptItem[]
 }
 
+interface GiftCardOption {
+  id: string
+  retailer: string
+  current_balance: number
+  status: string
+}
+
 interface ReceiptConfirmationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   receiptData: ReceiptData | null
-  onConfirm: (data: ReceiptData) => Promise<SavedPurchaseSummary | null | void>
+  onConfirm: (
+    data: ReceiptData,
+    options?: { giftCardUsage?: { gift_card_id: string; amount: number } | null },
+  ) => Promise<SavedPurchaseSummary | null | void>
   onCancel: () => void
   onSuccess?: (purchase: SavedPurchaseSummary) => void
+  giftCards?: GiftCardOption[]
 }
 
 export function ReceiptConfirmationDialog({
@@ -52,10 +70,14 @@ export function ReceiptConfirmationDialog({
   onConfirm,
   onCancel,
   onSuccess,
+  giftCards = [],
 }: ReceiptConfirmationDialogProps) {
   const [editedData, setEditedData] = useState<ReceiptData | null>(null)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [selectedGiftCardId, setSelectedGiftCardId] = useState('')
+  const [giftCardAmount, setGiftCardAmount] = useState('')
+  const [giftCardError, setGiftCardError] = useState<string | null>(null)
 
   // Initialize edited data when receipt data changes
   useEffect(() => {
@@ -119,12 +141,45 @@ export function ReceiptConfirmationDialog({
     }
   }
 
+  const selectedGiftCard = giftCards.find(card => card.id === selectedGiftCardId)
+
+  const resetGiftCardState = () => {
+    setSelectedGiftCardId('')
+    setGiftCardAmount('')
+    setGiftCardError(null)
+  }
+
   const handleConfirm = async () => {
     if (!editedData) return
 
+    let giftCardUsage: { gift_card_id: string; amount: number } | null = null
+    if (selectedGiftCardId) {
+      if (!selectedGiftCard) {
+        setGiftCardError('Selected gift card not found')
+        return
+      }
+      const amount = parseFloat(giftCardAmount)
+      if (isNaN(amount) || amount <= 0) {
+        setGiftCardError('Enter a valid amount to apply')
+        return
+      }
+      if (amount > selectedGiftCard.current_balance + 0.001) {
+        setGiftCardError('Amount exceeds available gift card balance')
+        return
+      }
+      if (amount > editedData.total + 0.001) {
+        setGiftCardError('Amount cannot exceed the receipt total')
+        return
+      }
+      giftCardUsage = {
+        gift_card_id: selectedGiftCard.id,
+        amount,
+      }
+    }
+
     setSaving(true)
     try {
-      const savedPurchase = await onConfirm(editedData)
+      const savedPurchase = await onConfirm(editedData, { giftCardUsage })
       setSuccess(true)
       if (savedPurchase && onSuccess) {
         onSuccess(savedPurchase)
@@ -146,6 +201,7 @@ export function ReceiptConfirmationDialog({
       setEditedData(null)
       setSuccess(false)
       onCancel()
+      resetGiftCardState()
     }, 300)
   }
 
@@ -234,6 +290,73 @@ export function ReceiptConfirmationDialog({
                   />
                 </div>
               </div>
+
+              {giftCards.length > 0 && (
+                <div className="border border-[#E0DEDB] rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[#37322F] font-sans">Apply gift card (optional)</Label>
+                    {selectedGiftCardId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetGiftCardState}
+                        className="text-[#605A57]"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  <Select
+                    value={selectedGiftCardId}
+                    onValueChange={(value) => {
+                      setGiftCardError(null)
+                      setSelectedGiftCardId(value)
+                      const card = giftCards.find((card) => card.id === value)
+                      if (card) {
+                        const defaultAmount = Math.min(card.current_balance, editedData.total)
+                        setGiftCardAmount(defaultAmount.toFixed(2))
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a card to apply" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {giftCards.map((card) => (
+                        <SelectItem key={card.id} value={card.id}>
+                          {card.retailer} • ${card.current_balance.toFixed(2)} ({card.status})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedGiftCardId && selectedGiftCard && (
+                    <div className="space-y-2">
+                      <Label htmlFor="gift-card-amount" className="text-[#37322F] font-sans">
+                        Amount to apply
+                      </Label>
+                      <Input
+                        id="gift-card-amount"
+                        type="number"
+                        min={0.01}
+                        step="0.01"
+                        value={giftCardAmount}
+                        onChange={(e) => {
+                          setGiftCardError(null)
+                          setGiftCardAmount(e.target.value)
+                        }}
+                        className="border-[#E0DEDB] focus:border-[#37322F] focus:ring-[#37322F] font-sans"
+                      />
+                      <p className="text-xs text-[#605A57] font-sans">
+                        Available balance: ${selectedGiftCard.current_balance.toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                  {giftCardError && (
+                    <p className="text-xs text-[#B44D12] font-sans">{giftCardError}</p>
+                  )}
+                </div>
+              )}
 
               {/* Items */}
               <div className="space-y-3">

@@ -124,8 +124,8 @@ export const UuidSchema = z.string()
 
 export const GiftCardSchema = z.object({
   retailer: z.string().min(1, 'Retailer is required').max(100),
-  card_number: z.string().min(1, 'Card number is required').max(100),
-  pin: z.string().min(1, 'PIN is required').max(100),
+  card_number: z.string().max(100).optional(),
+  pin: z.string().max(100).optional(),
   initial_balance: z.coerce.number().min(0.01, 'Initial balance must be at least $0.01'),
 });
 

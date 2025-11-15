@@ -82,15 +82,15 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="card_number">Card Number</Label>
-            <Input id="card_number" {...form.register('card_number')} />
+            <Label htmlFor="card_number">Card Number (optional)</Label>
+            <Input id="card_number" placeholder="XXXX-XXXX-XXXX" {...form.register('card_number')} />
             {form.formState.errors.card_number && (
               <p className="text-red-500 text-xs">{form.formState.errors.card_number.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="pin">PIN</Label>
-            <Input id="pin" type="password" {...form.register('pin')} />
+            <Label htmlFor="pin">PIN (optional)</Label>
+            <Input id="pin" type="password" placeholder="PIN or leave blank" {...form.register('pin')} />
             {form.formState.errors.pin && (
               <p className="text-red-500 text-xs">{form.formState.errors.pin.message}</p>
             )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,18 @@ interface ReceiptData {
     quantity: number
   }>
   confidence: number
+}
+
+type GiftCardOption = {
+  id: string
+  retailer: string
+  current_balance: number
+  status: string
+}
+
+type GiftCardUsage = {
+  gift_card_id: string
+  amount: number
 }
 
 type SavedPurchase = {
@@ -46,6 +58,41 @@ export function AddReceipt() {
   const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [newPurchase, setNewPurchase] = useState<SavedPurchase | null>(null)
   const [trackDialogOpen, setTrackDialogOpen] = useState(false)
+  const [giftCards, setGiftCards] = useState<GiftCardOption[]>([])
+  const [giftCardsLoading, setGiftCardsLoading] = useState(false)
+  const [giftCardsError, setGiftCardsError] = useState<string | null>(null)
+
+  const loadGiftCards = useCallback(async () => {
+    setGiftCardsLoading(true)
+    setGiftCardsError(null)
+    try {
+      const response = await fetch('/api/gift-cards')
+      if (!response.ok) {
+        throw new Error('Failed to load gift cards')
+      }
+      const data = await response.json()
+      if (Array.isArray(data)) {
+        setGiftCards(
+          data.map(card => ({
+            id: card.id,
+            retailer: card.retailer,
+            current_balance: Number(card.current_balance ?? 0),
+            status: card.status || 'active',
+          })),
+        )
+      } else {
+        setGiftCards([])
+      }
+    } catch (err: any) {
+      setGiftCardsError(err?.message || 'Failed to load gift cards')
+    } finally {
+      setGiftCardsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadGiftCards()
+  }, [loadGiftCards])
 
   const handleFileSelect = async (file: File) => {
     setSelectedFile(file)
@@ -191,6 +238,7 @@ export function AddReceipt() {
 
   const handleConfirmReceipt = async (
     confirmedData: ReceiptData,
+    options?: { giftCardUsage?: GiftCardUsage | null },
   ): Promise<void | SavedPurchase | null> => {
     try {
       // Save to database
@@ -200,6 +248,7 @@ export function AddReceipt() {
         body: JSON.stringify({
           receiptData: confirmedData,
           skipExtraction: true, // We already have the extracted data
+          giftCardUsage: options?.giftCardUsage,
         }),
       })
 
@@ -208,6 +257,10 @@ export function AddReceipt() {
       if (!response.ok) {
         console.error('Save receipt error:', data)
         throw new Error(data.error || 'Failed to save receipt')
+      }
+
+      if (options?.giftCardUsage) {
+        loadGiftCards()
       }
 
       return data.purchase as SavedPurchase
@@ -320,6 +373,12 @@ Date: 01/15/2024`}
           </div>
         )}
 
+        {giftCardsError && (
+          <div className="p-3 text-sm text-[#B44D12] bg-[#FEF3F2] border border-[#FECDCA] rounded-lg font-sans">
+            {giftCardsError}
+          </div>
+        )}
+
         {/* Helper Text */}
         <div className="bg-[rgba(55,50,47,0.05)] p-4 rounded-lg">
           <p className="text-sm text-[#605A57] font-sans mb-2">
@@ -340,6 +399,7 @@ Date: 01/15/2024`}
         receiptData={extractedData}
         onConfirm={handleConfirmReceipt}
         onCancel={handleCancelConfirmation}
+        giftCards={giftCards}
         onSuccess={(purchase) => {
           if (purchase) {
             setNewPurchase({
