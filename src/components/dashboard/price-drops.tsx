@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { TrendingDown, MoreVertical, Trash2 } from 'lucide-react'
+import { TrendingDown, MoreVertical, Trash2, Wallet } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RefundDialog } from '@/components/refund-dialog'
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useToast } from '@/hooks/use-toast'
 
 type PriceTracking = {
   id: string
@@ -51,6 +52,8 @@ export function PriceDrops() {
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null)
   const [refundDialogOpen, setRefundDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [allocatingId, setAllocatingId] = useState<string | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     const load = async () => {
@@ -122,6 +125,36 @@ export function PriceDrops() {
     }
   }
 
+  const handleAllocate = async (drop: PriceDropItem) => {
+    setAllocatingId(drop.id)
+    try {
+      const response = await fetch('/api/price-drop/allocate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realSavings: drop.savings }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to allocate savings')
+      }
+
+      toast({
+        title: 'Savings allocated',
+        description: `Moved $${data.scaledSavings?.toFixed?.(2) ?? '0.00'} to your refund wallet.`,
+      })
+    } catch (err: any) {
+      console.error('Failed to allocate savings:', err)
+      toast({
+        title: 'Allocation failed',
+        description: err?.message || 'Unable to allocate savings right now.',
+        variant: 'destructive',
+      })
+    } finally {
+      setAllocatingId(null)
+    }
+  }
+
   const totalSavings = drops.reduce((sum, d) => sum + d.savings, 0)
 
   return (
@@ -189,8 +222,18 @@ export function PriceDrops() {
 
                 <div className="flex items-center gap-2">
                   <div className="flex-1 bg-emerald-50/80 backdrop-blur-sm text-emerald-700 text-xs font-medium px-3 py-2 rounded-lg border-2 border-emerald-200">
-                    Eligible for refund based on price drop
+                    You saved ${drop.savings.toFixed(2)}. Allocate ${(drop.savings / 100).toFixed(2)} to your Refund Wallet?
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1"
+                    onClick={() => handleAllocate(drop)}
+                    disabled={allocatingId === drop.id}
+                  >
+                    <Wallet className="w-4 h-4" />
+                    {allocatingId === drop.id ? 'Allocating...' : 'Allocate'}
+                  </Button>
                   <Button
                     size="sm"
                     className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 border-2 border-emerald-600"
