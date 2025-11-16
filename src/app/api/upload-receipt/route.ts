@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { extractTextFromImage } from '@/lib/claude/ocr';
-import { extractReceiptData } from '@/lib/claude/extract-receipt';
-import { analyzeReturnEligibility } from '@/lib/claude/analyze-return';
+import { receiptAgent } from '@/lib/agents/receipt-agent';
 
 /**
  * POST /api/upload-receipt - Upload and process receipt image
- * Now returns extracted data without saving (for confirmation flow)
+ * Now uses Receipt Agent with warranty extraction
  */
 export async function POST(request: NextRequest) {
   try {
@@ -45,23 +43,38 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     const base64 = buffer.toString('base64');
 
-    console.log('Processing receipt image with Claude Vision...');
+    console.log('[API] Processing receipt with Receipt Agent (includes warranty extraction)...');
 
-    // Step 1: Extract text from image using Claude Vision
-    const ocrText = await extractTextFromImage(base64, file.type);
+    // Use Receipt Agent to process the receipt (includes warranty extraction)
+    const result = await receiptAgent.processReceipt(base64, file.type, user.id);
 
-    console.log('OCR text extracted:', ocrText);
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: result.error || 'Failed to process receipt',
+          details: result.error
+        },
+        { status: 500 }
+      );
+    }
 
-    // Step 2: Parse receipt data from OCR text
-    const receiptData = await extractReceiptData(ocrText);
-
-    console.log('Receipt data extracted:', receiptData);
+    console.log('[API] Receipt processed successfully:', {
+      merchant: result.data.merchant,
+      total: result.data.total,
+      itemCount: result.data.items.length,
+      warrantyCount: result.data.warranties?.length || 0,
+    });
 
     // Return extracted data for user confirmation (don't save yet)
     return NextResponse.json({
       success: true,
-      extractedData: receiptData,
-      ocrText,
+      extractedData: result.data,
+      warranties: result.data.warranties || [],
+      metadata: {
+        iterations: result.iterations,
+        tokensUsed: result.tokensUsed,
+        cost: result.cost,
+      },
     });
   } catch (error) {
     console.error('Error processing receipt upload:', error);

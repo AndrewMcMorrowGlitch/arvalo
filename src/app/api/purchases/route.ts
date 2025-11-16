@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
       skipExtraction,
       extractOnly,
       giftCardUsage,
+      warranties: providedWarranties,
     } = body;
 
     // Import here to avoid circular dependencies
@@ -341,11 +342,57 @@ export async function POST(request: NextRequest) {
       priority: 'normal',
     });
 
+    // Save warranties if provided
+    const savedWarranties = [];
+    if (providedWarranties && Array.isArray(providedWarranties) && providedWarranties.length > 0) {
+      console.log(`[API] Saving ${providedWarranties.length} warranties from receipt...`);
+
+      for (const warranty of providedWarranties) {
+        try {
+          const { data: savedWarranty, error: warrantyError } = await supabase
+            .from('warranties')
+            .insert({
+              user_id: user.id,
+              purchase_id: purchase.id,
+              product_name: warranty.product_name,
+              manufacturer: warranty.manufacturer,
+              retailer: receiptData.merchant,
+              category: warranty.category || null,
+              purchase_price: warranty.purchase_price || null,
+              purchase_date: receiptData.date,
+              warranty_duration_months: warranty.warranty_duration_months || 12,
+              warranty_end_date: warranty.warranty_end_date,
+              warranty_type: warranty.warranty_type || 'manufacturer',
+              coverage_type: warranty.coverage_type || 'limited',
+              coverage_details: warranty.coverage_details || null,
+              warranty_url: warranty.warranty_url || null,
+              claim_phone: warranty.claim_phone || null,
+              claim_email: warranty.claim_email || null,
+              claim_process: warranty.claim_process || null,
+            })
+            .select()
+            .single();
+
+          if (warrantyError) {
+            console.error('[API] Failed to save warranty:', warrantyError);
+          } else {
+            savedWarranties.push(savedWarranty);
+            console.log('[API] Saved warranty:', savedWarranty.product_name);
+          }
+        } catch (warrantyError) {
+          console.error('[API] Error saving warranty:', warrantyError);
+        }
+      }
+
+      console.log(`[API] Successfully saved ${savedWarranties.length}/${providedWarranties.length} warranties`);
+    }
+
     return NextResponse.json({
       success: true,
       purchase,
       receiptData,
       analysis: claudeAnalysis,
+      warranties: savedWarranties,
     });
   } catch (error) {
     console.error('Error creating purchase:', error);

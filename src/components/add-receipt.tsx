@@ -22,6 +22,21 @@ interface ReceiptData {
     quantity: number
   }>
   confidence: number
+  warranties?: Array<{
+    product_name: string
+    manufacturer: string
+    warranty_duration_months: number
+    warranty_end_date: string
+    category?: string
+    purchase_price?: number
+    warranty_type?: string
+    coverage_type?: string
+    coverage_details?: string
+    warranty_url?: string
+    claim_phone?: string
+    claim_email?: string
+    claim_process?: string
+  }>
 }
 
 type GiftCardOption = {
@@ -147,7 +162,12 @@ export function AddReceipt() {
 
         await new Promise(resolve => setTimeout(resolve, 300)) // Show success
 
-        setExtractedData(data.extractedData)
+        // Attach warranties to extracted data if they exist
+        const extractedWithWarranties = {
+          ...data.extractedData,
+          warranties: data.warranties || []
+        }
+        setExtractedData(extractedWithWarranties)
         setShowConfirmation(true)
       } else {
         steps[2].status = 'error'
@@ -241,7 +261,7 @@ export function AddReceipt() {
     options?: { giftCardUsage?: GiftCardUsage | null },
   ): Promise<void | SavedPurchase | null> => {
     try {
-      // Save to database
+      // Save to database (including warranties if extracted)
       const response = await fetch('/api/purchases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -249,6 +269,7 @@ export function AddReceipt() {
           receiptData: confirmedData,
           skipExtraction: true, // We already have the extracted data
           giftCardUsage: options?.giftCardUsage,
+          warranties: confirmedData.warranties || [], // Pass warranties to be saved
         }),
       })
 
