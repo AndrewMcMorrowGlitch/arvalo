@@ -6,3 +6,4 @@ export { webScrapeTool } from './web-scrape';
 export { priceLookupTool } from './price-lookup';
 export { databaseQueryTool } from './database-query';
 export { databaseUpdateTool } from './database-update';
+export { warrantyLookupTool } from './warranty-lookup';

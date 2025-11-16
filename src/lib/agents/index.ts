@@ -9,6 +9,7 @@ export {
   recurrentOptimizerAgent,
   RecurrentOptimizerAgent,
 } from './recurrent-optimizer-agent';
+export { warrantyAgent, WarrantyAgent } from './warranty-agent';
 
 export * from './types';
 export * from './tools';

@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent';
 import { AgentConfig } from './types';
 import { webSearchTool, webScrapeTool, databaseQueryTool } from './tools';
+import { warrantyLookupTool } from './tools/warranty-lookup';
 import { extractTextFromImage } from '@/lib/claude/ocr';
 
 /**
@@ -25,7 +26,8 @@ export class ReceiptAgent extends BaseAgent {
 3. Cross-reference with the user's purchase history to detect duplicates
 4. Categorize items intelligently
 5. Detect potential price match opportunities by checking if items are available cheaper elsewhere
-6. Provide actionable recommendations
+6. Extract warranty information for applicable products
+7. Provide actionable recommendations
 
 When processing a receipt:
 - Be thorough in extracting all relevant details
@@ -45,7 +47,17 @@ Always return your final analysis in JSON format with these fields:
       "name": "Product Name",
       "price": 49.99,
       "category": "Electronics",
-      "price_match_opportunity": false
+      "price_match_opportunity": false,
+      "has_warranty": true,
+      "warranty_duration_months": 12
+    }
+  ],
+  "warranties": [
+    {
+      "product_name": "Product Name",
+      "manufacturer": "Brand",
+      "warranty_duration_months": 12,
+      "warranty_end_date": "YYYY-MM-DD"
     }
   ],
   "duplicate_purchase": false,
@@ -60,7 +72,7 @@ Always return your final analysis in JSON format with these fields:
     super(config);
 
     // Register tools
-    this.addTools([webSearchTool, webScrapeTool, databaseQueryTool]);
+    this.addTools([webSearchTool, webScrapeTool, databaseQueryTool, warrantyLookupTool]);
   }
 
   /**
@@ -88,9 +100,11 @@ Please:
 3. Check if this purchase already exists in the database
 4. Categorize the items
 5. Check if there are any price match opportunities
-6. Provide recommendations
+6. For items with warranties (electronics, appliances), lookup warranty information
+7. Extract warranty duration and calculate end dates
+8. Provide recommendations including warranty tracking
 
-Return the analysis in the specified JSON format.`,
+Return the analysis in the specified JSON format with warranty information.`,
       context: {
         userId,
         receiptText,
