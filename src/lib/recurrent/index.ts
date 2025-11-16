@@ -94,14 +94,6 @@ export async function detectRecurrentPurchases(
     }
     if (intervals.length === 0) return
     const avgInterval = intervals.reduce((sum, d) => sum + d, 0) / intervals.length
-    if (avgInterval > 90) {
-      return
-    }
-    const maxInterval = Math.max(...intervals)
-    const minInterval = Math.min(...intervals)
-    if (maxInterval - minInterval > Math.max(10, avgInterval * 0.4)) {
-      return
-    }
     const lastPurchaseDate = dates[dates.length - 1]
     const nextPurchaseDate = new Date(
       lastPurchaseDate.getTime() + avgInterval * dayMs

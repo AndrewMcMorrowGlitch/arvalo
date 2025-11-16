@@ -31,11 +31,12 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
 
   const form = useForm<GiftCardFormData>({
     resolver: zodResolver(GiftCardSchema),
-    mode: 'onBlur',
+    mode: 'onSubmit',
     defaultValues: {
       retailer: '',
       card_number: '',
       pin: '',
+      initial_balance: 0,
     },
   })
 
@@ -75,29 +76,35 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="retailer">Retailer</Label>
-            <Input id="retailer" {...form.register('retailer')} />
+            <Label htmlFor="retailer">Retailer Name</Label>
+            <Input id="retailer" placeholder="e.g. Amazon, Walmart, Target" {...form.register('retailer')} />
             {form.formState.errors.retailer && (
               <p className="text-red-500 text-xs">{form.formState.errors.retailer.message}</p>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="card_number">Card Number (optional)</Label>
-            <Input id="card_number" placeholder="XXXX-XXXX-XXXX" {...form.register('card_number')} />
+            <Input id="card_number" placeholder="Leave blank if you don't want to save it" {...form.register('card_number')} />
             {form.formState.errors.card_number && (
               <p className="text-red-500 text-xs">{form.formState.errors.card_number.message}</p>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="pin">PIN (optional)</Label>
-            <Input id="pin" type="password" placeholder="PIN or leave blank" {...form.register('pin')} />
+            <Input id="pin" type="password" placeholder="Leave blank if not needed" {...form.register('pin')} />
             {form.formState.errors.pin && (
               <p className="text-red-500 text-xs">{form.formState.errors.pin.message}</p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="initial_balance">Initial Balance ($)</Label>
-            <Input id="initial_balance" type="number" step="0.01" {...form.register('initial_balance')} />
+            <Label htmlFor="initial_balance">Initial Balance (optional)</Label>
+            <Input
+              id="initial_balance"
+              type="number"
+              step="0.01"
+              placeholder="Leave blank if unknown"
+              {...form.register('initial_balance')}
+            />
             {form.formState.errors.initial_balance && (
               <p className="text-red-500 text-xs">{form.formState.errors.initial_balance.message}</p>
             )}
