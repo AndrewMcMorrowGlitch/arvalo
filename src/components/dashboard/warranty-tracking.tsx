@@ -118,7 +118,7 @@ export function WarrantyTracking() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900">
-            {summary.expiringSoon}
+            {summary.expiring_soon}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             We&apos;ll remind you before coverage ends
