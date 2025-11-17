@@ -18,12 +18,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { purchase_id, product_url } = body;
+    const { purchase_id, product_url, product_name, merchant_name, retailer_domain } = body;
 
     // Validate inputs
     try {
       UuidSchema.parse(purchase_id);
-      ProductUrlSchema.parse(product_url);
+      if (product_url) {
+        ProductUrlSchema.parse(product_url);
+      }
     } catch (error) {
       if (error instanceof z.ZodError) {
         return NextResponse.json(
@@ -37,7 +39,13 @@ export async function POST(request: NextRequest) {
     // Verify purchase belongs to user
     const { data: purchase } = await supabase
       .from('purchases')
-      .select('*')
+      .select(`
+        *,
+        retailers (
+          name,
+          domain
+        )
+      `)
       .eq('id', purchase_id)
       .eq('user_id', user.id)
       .single();
@@ -46,8 +54,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
     }
 
-    // Get initial price using Bright Data (URL is now validated)
-    const priceResult = await checkProductPrice(product_url);
+    const derivedProductName =
+      product_name ||
+      (Array.isArray(purchase.items) && purchase.items.length > 0
+        ? purchase.items[0]?.name
+        : purchase.merchant_name);
+    const derivedMerchantName =
+      merchant_name || purchase?.retailers?.name || purchase.merchant_name;
+    const derivedRetailerDomain =
+      retailer_domain ||
+      purchase?.retailers?.domain ||
+      inferRetailerDomain(derivedMerchantName);
+
+    if (!derivedProductName) {
+      return NextResponse.json(
+        { error: 'Missing product name. Please provide one manually.' },
+        { status: 400 }
+      );
+    }
+
+    const priceResult = await checkProductPrice(
+      product_url
+        ? {
+            url: product_url,
+            productName: derivedProductName,
+            retailerDomain: derivedRetailerDomain,
+          }
+        : {
+            productName: derivedProductName,
+            retailerDomain: derivedRetailerDomain,
+          }
+    );
+
+    const resolvedProductUrl = priceResult.url || product_url;
+    if (!resolvedProductUrl) {
+      throw new Error('Unable to resolve a product URL from Brave search.');
+    }
 
     // Check for price drop immediately (5% threshold)
     const originalPrice = purchase.total_amount;
@@ -68,7 +110,7 @@ export async function POST(request: NextRequest) {
       .from('price_tracking')
       .insert({
         purchase_id,
-        product_url,
+        product_url: resolvedProductUrl,
         product_name: priceResult.title,
         original_price: originalPrice,
         current_price: currentPrice,
@@ -136,6 +178,38 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+const RETAILER_DOMAIN_MAP: Record<string, string> = {
+  amazon: 'amazon.com',
+  target: 'target.com',
+  walmart: 'walmart.com',
+  'best buy': 'bestbuy.com',
+  bestbuy: 'bestbuy.com',
+  'home depot': 'homedepot.com',
+  homedepot: 'homedepot.com',
+  ebay: 'ebay.com',
+  costco: 'costco.com',
+  sam: 'samsclub.com',
+  'sam\'s club': 'samsclub.com',
+  sephora: 'sephora.com',
+  nike: 'nike.com',
+  apple: 'apple.com',
+}
+
+function inferRetailerDomain(merchantName?: string | null) {
+  if (!merchantName) return undefined
+  const normalized = merchantName.toLowerCase()
+
+  for (const [key, domain] of Object.entries(RETAILER_DOMAIN_MAP)) {
+    if (normalized.includes(key)) {
+      return domain
+    }
+  }
+
+  const fallback = normalized.replace(/[^a-z0-9]/g, '')
+  if (!fallback) return undefined
+  return `${fallback}.com`
 }
 
 export async function GET(request: NextRequest) {
