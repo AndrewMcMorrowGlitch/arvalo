@@ -5,12 +5,15 @@ import { createClient } from '@/lib/supabase/server'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  // Get the base URL for redirects - prefer production URL over request origin
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+
   const code = request.nextUrl.searchParams.get('code')
   const error = request.nextUrl.searchParams.get('error')
 
   if (error) {
     console.error('Google OAuth error:', error)
-    return NextResponse.redirect(new URL('/dashboard?gmail=error', request.nextUrl.origin))
+    return NextResponse.redirect(new URL('/dashboard?gmail=error', baseUrl))
   }
 
   if (!code) {
@@ -56,7 +59,7 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const body = await tokenResponse.text()
       console.error('Failed to exchange Google code for tokens:', body)
-      return NextResponse.redirect(new URL('/dashboard?gmail=error', request.nextUrl.origin))
+      return NextResponse.redirect(new URL('/dashboard?gmail=error', baseUrl))
     }
 
     const tokens = await tokenResponse.json()
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     if (!refreshToken) {
       console.warn('No refresh token returned from Google OAuth')
-      return NextResponse.redirect(new URL('/dashboard?gmail=connected', request.nextUrl.origin))
+      return NextResponse.redirect(new URL('/dashboard?gmail=connected', baseUrl))
     }
 
     const supabase = await createClient()
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return NextResponse.redirect(new URL('/login', request.nextUrl.origin))
+      return NextResponse.redirect(new URL('/login', baseUrl))
     }
 
     // Store refresh token in user metadata
@@ -87,10 +90,10 @@ export async function GET(request: NextRequest) {
       console.error('Failed to store Gmail refresh token:', updateError)
     }
 
-    return NextResponse.redirect(new URL('/dashboard?gmail=connected', request.nextUrl.origin))
+    return NextResponse.redirect(new URL('/dashboard?gmail=connected', baseUrl))
   } catch (err) {
     console.error('Error handling Google OAuth callback:', err)
-    return NextResponse.redirect(new URL('/dashboard?gmail=error', request.nextUrl.origin))
+    return NextResponse.redirect(new URL('/dashboard?gmail=error', baseUrl))
   }
 }
 

@@ -27,6 +27,7 @@ import { CrossRetailer } from '@/components/dashboard/cross-retailer'
 import { DuplicateCharges } from '@/components/dashboard/duplicate-charges'
 import { WarrantyTracking } from '@/components/dashboard/warranty-tracking'
 import { AddReceipt } from '@/components/add-receipt'
+import { BankTransactions } from '@/components/dashboard/bank-transactions'
 
 export type DashboardStats = {
   realizedSavings: number
@@ -54,6 +55,7 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
     | 'cross-retailer'
     | 'duplicate'
     | 'warranty'
+    | 'transactions'
   >('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -70,6 +72,7 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
     { id: 'cross-retailer' as const, label: 'Cross-retailer', icon: Search },
     { id: 'duplicate' as const, label: 'Duplicate charges', icon: AlertCircle },
     { id: 'warranty' as const, label: 'Warranty tracking', icon: Shield },
+    { id: 'transactions' as const, label: 'Recent transactions', icon: DollarSign },
   ]
 
   const handleImportFromGmail = async () => {
@@ -415,6 +418,7 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
                 {activeSection === 'cross-retailer' && <CrossRetailer />}
                 {activeSection === 'duplicate' && <DuplicateCharges />}
                 {activeSection === 'warranty' && <WarrantyTracking />}
+                {activeSection === 'transactions' && <BankTransactions />}
               </motion.div>
             </AnimatePresence>
           </div>
