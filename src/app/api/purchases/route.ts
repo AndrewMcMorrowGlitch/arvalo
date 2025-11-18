@@ -9,6 +9,7 @@ import {
   savePurchase,
   updateRecurrentPurchases,
 } from '@/lib/recurrent'
+import { normalizeRetailer } from '@/lib/retailers'
 
 /**
  * GET /api/purchases - List all purchases for authenticated user
@@ -166,34 +167,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find retailer
-    const { data: retailers } = await supabase
-      .from('retailers')
-      .select('*')
-      .ilike('name', `%${receiptData.merchant}%`)
-      .limit(1);
+    const normalizedRetailer = normalizeRetailer(receiptData.merchant)
+    if (normalizedRetailer) {
+      receiptData.merchant = normalizedRetailer.name
+    }
 
-    let retailer = retailers && retailers.length > 0 ? retailers[0] : null;
+    let retailer = null
 
-    // If retailer doesn't exist, create a basic one without policy (skip scraping for speed)
+    if (normalizedRetailer?.domain) {
+      const { data: retailerByDomain } = await supabase
+        .from('retailers')
+        .select('*')
+        .ilike('domain', normalizedRetailer.domain)
+        .limit(1)
+
+      retailer = retailerByDomain && retailerByDomain.length > 0 ? retailerByDomain[0] : null
+    }
+
     if (!retailer) {
-      console.log(`Creating basic retailer entry for ${receiptData.merchant}...`);
+      const { data: retailers } = await supabase
+        .from('retailers')
+        .select('*')
+        .ilike('name', `%${receiptData.merchant}%`)
+        .limit(1)
+
+      retailer = retailers && retailers.length > 0 ? retailers[0] : null
+    }
+
+    if (!retailer) {
+      console.log(`Creating basic retailer entry for ${receiptData.merchant}...`)
       try {
         const { data: newRetailer } = await supabase
           .from('retailers')
           .insert({
             name: receiptData.merchant,
-            default_return_days: 30, // Default assumption
+            domain: normalizedRetailer?.domain || null,
+            default_return_days: 30,
             has_price_match: false,
           })
           .select()
-          .single();
+          .single()
 
-        retailer = newRetailer;
-        console.log(`Created basic retailer entry for ${receiptData.merchant}`);
+        retailer = newRetailer
+        console.log(`Created basic retailer entry for ${receiptData.merchant}`)
       } catch (error) {
-        console.error('Failed to create retailer:', error);
-        // Continue without retailer
+        console.error('Failed to create retailer:', error)
       }
     }
 

@@ -5,6 +5,7 @@ import { ProductUrlSchema, UuidSchema, formatValidationError } from '@/lib/valid
 import { z } from 'zod';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
 import { autoHandlePriceDropRefund } from '@/lib/refund/auto-price-drop';
+import { normalizeRetailer, inferRetailerDomain } from '@/lib/retailers';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,12 +60,16 @@ export async function POST(request: NextRequest) {
       (Array.isArray(purchase.items) && purchase.items.length > 0
         ? purchase.items[0]?.name
         : purchase.merchant_name);
-    const derivedMerchantName =
+
+    const merchantSourceName =
       merchant_name || purchase?.retailers?.name || purchase.merchant_name;
+
+    const normalizedMerchant = normalizeRetailer(merchantSourceName);
     const derivedRetailerDomain =
       retailer_domain ||
       purchase?.retailers?.domain ||
-      inferRetailerDomain(derivedMerchantName);
+      normalizedMerchant?.domain ||
+      inferRetailerDomain(merchantSourceName);
 
     if (!derivedProductName) {
       return NextResponse.json(
@@ -178,38 +183,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-const RETAILER_DOMAIN_MAP: Record<string, string> = {
-  amazon: 'amazon.com',
-  target: 'target.com',
-  walmart: 'walmart.com',
-  'best buy': 'bestbuy.com',
-  bestbuy: 'bestbuy.com',
-  'home depot': 'homedepot.com',
-  homedepot: 'homedepot.com',
-  ebay: 'ebay.com',
-  costco: 'costco.com',
-  sam: 'samsclub.com',
-  'sam\'s club': 'samsclub.com',
-  sephora: 'sephora.com',
-  nike: 'nike.com',
-  apple: 'apple.com',
-}
-
-function inferRetailerDomain(merchantName?: string | null) {
-  if (!merchantName) return undefined
-  const normalized = merchantName.toLowerCase()
-
-  for (const [key, domain] of Object.entries(RETAILER_DOMAIN_MAP)) {
-    if (normalized.includes(key)) {
-      return domain
-    }
-  }
-
-  const fallback = normalized.replace(/[^a-z0-9]/g, '')
-  if (!fallback) return undefined
-  return `${fallback}.com`
 }
 
 export async function GET(request: NextRequest) {
