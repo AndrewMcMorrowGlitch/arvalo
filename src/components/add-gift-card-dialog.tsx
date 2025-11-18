@@ -15,7 +15,18 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { GiftCardSchema } from '@/lib/validation/schemas'
+import { toast } from '@/hooks/use-toast'
 
 type GiftCardFormData = z.infer<typeof GiftCardSchema>
 
@@ -54,6 +65,10 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
         onCardAdded()
         onOpenChange(false)
         form.reset()
+        toast({
+          title: 'Gift card added',
+          description: `${values.retailer} • $${Number(values.initial_balance).toFixed(2)} balance`,
+        })
       } else {
         const errorData = await response.json()
         setSubmitError(errorData.error || 'An unexpected error occurred.')
@@ -71,13 +86,36 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
         <DialogHeader>
           <DialogTitle>Add a new gift card</DialogTitle>
           <DialogDescription>
-            Enter the details of your gift card to start tracking it.
+            Enter the details of your gift card so we can help you use the balance before it expires. We never charge your card or share these details.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="retailer">Retailer Name</Label>
-            <Input id="retailer" placeholder="e.g. Amazon, Walmart, Target" {...form.register('retailer')} />
+            <Label htmlFor="retailer">Retailer</Label>
+            <Select
+              onValueChange={(value) => form.setValue('retailer', value, { shouldValidate: true })}
+              value={form.watch('retailer') || undefined}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a retailer" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Popular retailers</SelectLabel>
+                  <SelectItem value="Amazon">Amazon</SelectItem>
+                  <SelectItem value="Walmart">Walmart</SelectItem>
+                  <SelectItem value="Target">Target</SelectItem>
+                  <SelectItem value="Best Buy">Best Buy</SelectItem>
+                  <SelectItem value="Starbucks">Starbucks</SelectItem>
+                  <SelectItem value="Apple">Apple</SelectItem>
+                </SelectGroup>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>Other</SelectLabel>
+                  <SelectItem value="Other">Other / Misc</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
             {form.formState.errors.retailer && (
               <p className="text-red-500 text-xs">{form.formState.errors.retailer.message}</p>
             )}
@@ -97,12 +135,12 @@ export function AddGiftCardDialog({ isOpen, onOpenChange, onCardAdded }: AddGift
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="initial_balance">Initial Balance (optional)</Label>
+            <Label htmlFor="initial_balance">Initial Balance</Label>
             <Input
               id="initial_balance"
               type="number"
               step="0.01"
-              placeholder="Leave blank if unknown"
+              placeholder="Enter the card balance"
               {...form.register('initial_balance')}
             />
             {form.formState.errors.initial_balance && (

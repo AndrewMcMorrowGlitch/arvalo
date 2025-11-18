@@ -6,7 +6,13 @@ import { DashboardShell } from '@/components/dashboard/dashboard-shell'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: {
+    section?: string
+  }
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const supabase = await createClient()
 
   const {
@@ -131,9 +137,16 @@ export default async function DashboardPage() {
   const activeOpportunities = priceDrops + expiringSoon
   const trackedItems = activePurchases
 
+  const initialSection =
+    searchParams?.section === 'profile' ? 'profile' : 'overview'
+
   return (
     <DashboardShell
       userFirstName={userFirstName}
+      userEmail={user.email}
+      userId={user.id}
+      forwardEmail={settings?.forward_email || null}
+      initialSection={initialSection}
       stats={{
         realizedSavings,
         potentialSavings,
@@ -146,4 +159,3 @@ export default async function DashboardPage() {
     />
   )
 }
-

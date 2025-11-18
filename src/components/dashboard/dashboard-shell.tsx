@@ -14,6 +14,7 @@ import {
   Menu,
   RotateCcw,
   BarChart3,
+  User,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -39,24 +40,37 @@ export type DashboardStats = {
   activeOpportunities: number
 }
 
+type DashboardSection =
+  | 'overview'
+  | 'recurrent'
+  | 'price-drops'
+  | 'returns'
+  | 'subscriptions'
+  | 'gift-cards'
+  | 'cross-retailer'
+  | 'duplicate'
+  | 'warranty'
+  | 'transactions'
+  | 'profile'
+
 type DashboardShellProps = {
   userFirstName?: string | null
+  userEmail?: string | null
+  userId?: string
+  forwardEmail?: string | null
   stats: DashboardStats
+  initialSection?: DashboardSection
 }
 
-export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
-  const [activeSection, setActiveSection] = useState<
-    | 'overview'
-    | 'recurrent'
-    | 'price-drops'
-    | 'returns'
-    | 'subscriptions'
-    | 'gift-cards'
-    | 'cross-retailer'
-    | 'duplicate'
-    | 'warranty'
-    | 'transactions'
-  >('overview')
+export function DashboardShell({
+  userFirstName,
+  userEmail,
+  userId,
+  forwardEmail,
+  stats,
+  initialSection = 'overview',
+}: DashboardShellProps) {
+  const [activeSection, setActiveSection] = useState<DashboardSection>(initialSection)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
@@ -180,7 +194,14 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
 
           {/* User Section */}
           <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center gap-3 px-2 py-2 mb-2">
+            <button
+              type="button"
+              className="flex items-center gap-3 px-2 py-2 mb-2 w-full rounded-md hover:bg-gray-50 text-left"
+              onClick={() => {
+                setActiveSection('profile')
+                setSidebarOpen(false)
+              }}
+            >
               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium text-gray-700">
                 {userFirstName?.[0]?.toUpperCase() ?? '?'}
               </div>
@@ -189,10 +210,10 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
                   {userFirstName ? `Hey, ${userFirstName}` : 'Your account'}
                 </div>
                 <div className="text-xs text-gray-500 truncate">
-                  Signed in via Supabase
+                  View profile & settings
                 </div>
               </div>
-            </div>
+            </button>
             <form action="/api/auth/signout" method="post">
               <Button
                 variant="ghost"
@@ -419,6 +440,61 @@ export function DashboardShell({ userFirstName, stats }: DashboardShellProps) {
                 {activeSection === 'duplicate' && <DuplicateCharges />}
                 {activeSection === 'warranty' && <WarrantyTracking />}
                 {activeSection === 'transactions' && <BankTransactions />}
+                {activeSection === 'profile' && (
+                  <div className="space-y-8">
+                    <div className="border-l-4 border-gray-200 pl-4">
+                      <h1 className="text-2xl font-semibold text-gray-900 mb-1">
+                        Profile
+                      </h1>
+                      <p className="text-sm text-gray-600">
+                        Your account details and connected data.
+                      </p>
+                    </div>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-3">
+                        <h2 className="text-sm font-semibold text-gray-900">
+                          Account
+                        </h2>
+                        <div className="space-y-2 text-sm text-gray-700">
+                          <div>
+                            <div className="text-xs uppercase text-gray-500">
+                              Email
+                            </div>
+                            <div>{userEmail || 'Not set'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase text-gray-500">
+                              Name
+                            </div>
+                            <div>{userFirstName || 'Not set'}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs uppercase text-gray-500">
+                              User ID
+                            </div>
+                            <div className="font-mono text-[11px] text-gray-500 break-all">
+                              {userId}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-3">
+                        <h2 className="text-sm font-semibold text-gray-900">
+                          Email forwarding
+                        </h2>
+                        <div className="text-sm text-gray-700">
+                          <div className="text-xs uppercase text-gray-500">
+                            Forwarding address
+                          </div>
+                          <div>{forwardEmail || 'Not configured yet'}</div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Forward receipts to this address to have FairVal automatically scan and track them.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             </AnimatePresence>
           </div>
